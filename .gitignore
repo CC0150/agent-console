@@ -1,0 +1,15 @@
+node_modules/
+dist/
+.vite/
+.dev/
+coverage/
+*.log
+.env
+.env.local
+.DS_Store
+sidebar-collapsed.png
+sidebar-expanded.png
+
+apps/server/data/*
+!apps/server/data/.gitkeep
+!apps/server/data/reports/

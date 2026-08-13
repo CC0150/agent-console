@@ -1,0 +1,25 @@
+{
+  "name": "agent-console",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Agent 任务执行与回放控制台",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "concurrently -n server,web -c blue,green \"npm:dev:server\" \"npm:dev:web\"",
+    "dev:server": "npm run dev --workspace @agent-console/server",
+    "dev:web": "npm run dev --workspace @agent-console/web",
+    "build": "npm run build --workspace @agent-console/server && npm run build --workspace @agent-console/web",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "typescript": "^5.8.3"
+  }
+}

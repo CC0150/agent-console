@@ -1,0 +1,301 @@
+@import url("https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap");
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "IBM Plex Sans", "PingFang SC", "Microsoft YaHei", "Noto Sans SC",
+    system-ui, sans-serif;
+  --font-display: "Barlow Condensed", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas,
+    "Liberation Mono", monospace;
+
+  --color-ink-950: #07080a;
+  --color-ink-900: #0c0e11;
+  --color-ink-850: #111317;
+  --color-ink-800: #171a1f;
+  --color-ink-700: #20242a;
+  --color-ink-600: #2d323a;
+  --color-ink-500: #454b55;
+  --color-ink-400: #737a85;
+  --color-ink-300: #a5abb3;
+  --color-ink-200: #d0d3d7;
+  --color-ink-100: #eef0f1;
+  --color-signal-300: #ffd28a;
+  --color-signal-400: #ffbd55;
+  --color-signal-500: #f0a52e;
+  --color-signal-600: #c77e14;
+  --color-mint-300: #9ae8c1;
+  --color-mint-400: #62d7a4;
+  --color-mint-500: #31b87e;
+  --color-cyan-300: #9adcf0;
+  --color-cyan-400: #64c9e8;
+  --color-cyan-500: #2da3c8;
+  --color-rose-300: #ffa3a3;
+  --color-rose-400: #f17373;
+  --color-rose-500: #d94848;
+}
+
+:root,
+[data-theme="dark"] {
+  color-scheme: dark;
+  --page-bg: #07080a;
+  --grid-line: rgba(255, 255, 255, 0.018);
+  --page-text: #e8e6e0;
+  --terminal-bg: #090a0c;
+  --terminal-text: #d7dade;
+  --terminal-muted: #99a3ad;
+  --terminal-accent: #ffbd55;
+  --panel-bg: linear-gradient(180deg, rgba(24, 27, 32, 0.92), rgba(13, 15, 18, 0.96));
+  --panel-border: #20242a;
+  --panel-shadow: 0 14px 34px rgba(0, 0, 0, 0.22);
+  --terminal-shadow: 0 18px 44px rgba(0, 0, 0, 0.3);
+  --button-ink: #17120a;
+  --scrollbar-thumb: #343a42;
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+  --page-bg: #f3f4f2;
+  --grid-line: rgba(20, 26, 32, 0.04);
+  --page-text: #16191e;
+  --terminal-bg: #11151a;
+  --panel-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(244, 245, 243, 0.98));
+  --panel-border: #d5d9d8;
+  --panel-shadow: 0 10px 28px rgba(30, 38, 45, 0.08);
+  --terminal-shadow: 0 16px 40px rgba(30, 38, 45, 0.12);
+  --button-ink: #17120a;
+  --scrollbar-thumb: #b9c0c1;
+  --color-ink-950: #f3f4f2;
+  --color-ink-900: #ffffff;
+  --color-ink-850: #f0f1ef;
+  --color-ink-800: #e6e9e7;
+  --color-ink-700: #ccd2d1;
+  --color-ink-600: #b6bdc0;
+  --color-ink-500: #899199;
+  --color-ink-400: #5d666e;
+  --color-ink-300: #3c444c;
+  --color-ink-200: #242b32;
+  --color-ink-100: #11151a;
+  --color-signal-300: #9a5c00;
+  --color-signal-400: #b66b00;
+  --color-signal-500: #d98800;
+  --color-signal-600: #a65d00;
+  --color-mint-300: #167a54;
+  --color-mint-400: #0f8a5e;
+  --color-cyan-300: #167a99;
+  --color-cyan-400: #1286a8;
+  --color-rose-300: #b33737;
+  --color-rose-400: #c94747;
+  --color-amber-300: #9a6700;
+  --color-indigo-300: #4f46a5;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  background-color: var(--page-bg);
+  color: var(--page-text);
+  background-image:
+    linear-gradient(var(--grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+  background-size: 28px 28px;
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background-color: rgba(240, 165, 46, 0.35);
+  color: #fff8ec;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 999px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scroll-active {
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+
+.scroll-active::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+}
+
+svg {
+  stroke-width: 1.75;
+}
+
+.panel {
+  position: relative;
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  background: var(--panel-bg);
+  box-shadow: var(--panel-shadow);
+}
+
+.panel::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(255, 189, 85, 0.55), transparent 36%);
+  pointer-events: none;
+}
+
+.panel.border-dashed {
+  border-style: dashed;
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 46px;
+  border-bottom: 1px solid var(--panel-border);
+  padding: 0 18px;
+}
+
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--color-ink-400);
+}
+
+.display-label {
+  font-family: var(--font-display);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.hairline {
+  border-color: var(--panel-border);
+}
+
+.ledger-row {
+  transition:
+    background-color 0.16s ease,
+    transform 0.16s ease;
+}
+
+.ledger-row:hover {
+  background-color: color-mix(in oklab, var(--color-ink-700) 18%, transparent);
+}
+
+.btn-signal {
+  background-color: var(--color-signal-500);
+  color: var(--button-ink);
+}
+
+.terminal-shadow {
+  box-shadow: var(--terminal-shadow);
+}
+
+.terminal-bg {
+  background-color: var(--terminal-bg);
+}
+
+.reveal {
+  animation: reveal 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.reveal-delay-1 {
+  animation-delay: 60ms;
+}
+
+.reveal-delay-2 {
+  animation-delay: 120ms;
+}
+
+.reveal-delay-3 {
+  animation-delay: 180ms;
+}
+
+@keyframes reveal {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-pulse-dot {
+  animation: pulse-dot 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.45;
+    transform: scale(0.82);
+  }
+}
+
+.cursor-blink::after {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 1.05em;
+  margin-left: 2px;
+  vertical-align: -0.12em;
+  background: currentColor;
+  animation: blink 0.9s steps(1) infinite;
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: color-mix(in oklab, var(--color-ink-700) 16%, transparent);
+}
+
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in oklab, var(--color-ink-700) 24%, transparent),
+    transparent
+  );
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  to {
+    transform: translateX(100%);
+  }
+}
