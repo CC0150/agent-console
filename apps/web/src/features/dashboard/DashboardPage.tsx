@@ -1,32 +1,44 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowRight, Loader2, Plus, Sparkles } from "lucide-react";
 import { useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
-import type { Task } from "@agent-console/contracts";
+import { useNavigate } from "react-router-dom";
 import { api } from "../../lib/api";
-import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { ErrorBanner, toErrorMessage } from "../../components/ui/ErrorBanner";
 import { WorkspaceSelect } from "../../components/domain/WorkspaceSelect";
 import { EnvPanel } from "./EnvPanel";
 import { StatsPanel } from "./StatsPanel";
 import { TaskList } from "./TaskList";
 import { ToolsPanel } from "./ToolsPanel";
+import { useTaskListQuery } from "./taskListQuery";
 
 export function DashboardPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [searchParams, setSearchParams] = useSearchParams();
   const [goal, setGoal] = useState("");
-  const [pendingDelete, setPendingDelete] = useState<{
-    taskId: string;
-    goal: string;
-  } | null>(null);
-  const selectedWorkspace = searchParams.get("workspace") ?? "all";
+  const { state: listQuery, update: updateListQuery } = useTaskListQuery();
+  const selectedWorkspace = listQuery.workspace;
 
   const tasksQuery = useQuery({
-    queryKey: ["tasks", selectedWorkspace],
+    queryKey: [
+      "tasks",
+      listQuery.workspace,
+      listQuery.q.trim(),
+      listQuery.status,
+      listQuery.sort,
+      listQuery.order,
+      listQuery.page,
+      listQuery.pageSize,
+    ],
     queryFn: () =>
-      api.listTasks(selectedWorkspace === "all" ? undefined : selectedWorkspace),
+      api.listTasks({
+        workspaceId: listQuery.workspace === "all" ? undefined : listQuery.workspace,
+        q: listQuery.q.trim() || undefined,
+        status: listQuery.status === "all" ? undefined : listQuery.status,
+        sort: listQuery.sort,
+        order: listQuery.order,
+        page: listQuery.page,
+        pageSize: listQuery.pageSize,
+      }),
     refetchInterval: 3_000,
   });
   const statsQuery = useQuery({
@@ -54,29 +66,13 @@ export function DashboardPage() {
       navigate(`/tasks/${task.id}`);
     },
   });
-  const rerunMutation = useMutation({
-    mutationFn: (task: Task) => api.action(task.id, "rerun"),
-    onSuccess: ({ task }) => {
-      queryClient.invalidateQueries({ queryKey: ["tasks"] });
-      queryClient.invalidateQueries({ queryKey: ["stats"] });
-      navigate(`/tasks/${task.id}`);
-    },
-  });
-  const deleteMutation = useMutation({
-    mutationFn: ({ taskId }: { taskId: string }) => api.deleteTask(taskId),
-    onSuccess: () => {
-      setPendingDelete(null);
-      queryClient.invalidateQueries({ queryKey: ["tasks"] });
-      queryClient.invalidateQueries({ queryKey: ["stats"] });
-    },
-  });
 
   const queryError =
     tasksQuery.error ??
     statsQuery.error ??
     workspacesQuery.error ??
     runtimeQuery.error;
-  const mutationError = createMutation.error ?? rerunMutation.error ?? deleteMutation.error;
+  const mutationError = createMutation.error;
 
   return (
     <div className="space-y-5">
@@ -142,13 +138,7 @@ export function DashboardPage() {
             <WorkspaceSelect
               workspaces={workspacesQuery.data?.workspaces ?? []}
               value={selectedWorkspace}
-              onValueChange={(next) => {
-                if (next === "all") {
-                  setSearchParams({});
-                } else {
-                  setSearchParams({ workspace: next });
-                }
-              }}
+              onValueChange={(next) => updateListQuery({ workspace: next })}
               label="选择工作区"
               size="md"
             />
@@ -194,13 +184,7 @@ export function DashboardPage() {
             <WorkspaceSelect
               workspaces={workspacesQuery.data?.workspaces ?? []}
               value={selectedWorkspace}
-              onValueChange={(next) => {
-                if (next === "all") {
-                  setSearchParams({});
-                } else {
-                  setSearchParams({ workspace: next });
-                }
-              }}
+              onValueChange={(next) => updateListQuery({ workspace: next })}
               label="筛选工作区"
               size="sm"
             />
@@ -208,12 +192,9 @@ export function DashboardPage() {
           <StatsPanel stats={statsQuery.data} isLoading={statsQuery.isLoading} />
           <TaskList
             tasks={tasksQuery.data?.tasks ?? []}
+            total={tasksQuery.data?.total ?? 0}
             isLoading={tasksQuery.isLoading}
             workspaces={workspacesQuery.data?.workspaces ?? []}
-            rerunning={rerunMutation.isPending}
-            deleting={deleteMutation.isPending}
-            onRerun={rerunMutation.mutate}
-            onDelete={(taskId, goal) => setPendingDelete({ taskId, goal })}
           />
         </div>
         <aside className="min-w-0 space-y-5">
@@ -221,21 +202,6 @@ export function DashboardPage() {
           <EnvPanel />
         </aside>
       </div>
-
-      <ConfirmDialog
-        open={pendingDelete !== null}
-        tone="danger"
-        title="删除任务"
-        description={`确定删除任务“${pendingDelete?.goal ?? ""}”吗？删除后不可恢复。`}
-        confirmLabel="删除"
-        isLoading={deleteMutation.isPending}
-        onConfirm={() => {
-          if (pendingDelete) {
-            deleteMutation.mutate({ taskId: pendingDelete.taskId });
-          }
-        }}
-        onCancel={() => setPendingDelete(null)}
-      />
     </div>
   );
 }

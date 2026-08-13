@@ -5,6 +5,8 @@ import {
   TaskStatus,
   type Task,
   type TaskEvent,
+  type TaskListQuery,
+  type TaskSortField,
   type TaskStatus as TaskStatusType,
   type ApprovalRequest as ApprovalRequestType,
   type ApprovalStatus as ApprovalStatusType,
@@ -70,6 +72,21 @@ export interface TaskStats {
   successRate: number | null;
 }
 
+export interface TaskListResult {
+  tasks: Task[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+const TASK_SORT_COLUMNS: Record<TaskSortField, string> = {
+  createdAt: "created_at",
+  updatedAt: "updated_at",
+  status: "status",
+  currentStep: "current_step",
+};
+
 export function withTransaction<T>(fn: () => T): T {
   return db.transaction(fn)();
 }
@@ -122,6 +139,53 @@ export const taskRepository = {
           .prepare("SELECT * FROM tasks ORDER BY created_at DESC")
           .all() as unknown as TaskRow[]);
     return rows.map(mapTask);
+  },
+
+  query(input: TaskListQuery = { page: 1, pageSize: 20 }): TaskListResult {
+    const conditions: string[] = [];
+    const params: Array<string | number> = [];
+    const workspaceId = input.workspaceId?.trim();
+    const keyword = input.q?.trim();
+
+    if (workspaceId) {
+      conditions.push("workspace_id = ?");
+      params.push(workspaceId);
+    }
+    if (input.status) {
+      conditions.push("status = ?");
+      params.push(input.status);
+    }
+    if (keyword) {
+      conditions.push("(goal LIKE ? OR id LIKE ?)");
+      params.push(`%${keyword}%`, `%${keyword}%`);
+    }
+
+    const whereSql = conditions.length > 0 ? ` WHERE ${conditions.join(" AND ")}` : "";
+    const countRow = db
+      .prepare(`SELECT COUNT(*) AS count FROM tasks${whereSql}`)
+      .get(...params) as { count: number };
+    const total = countRow.count;
+    const pageSize = input.pageSize ?? 20;
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    const page = Math.min(input.page ?? 1, totalPages);
+    const sortColumn = TASK_SORT_COLUMNS[input.sort ?? "createdAt"];
+    const order = input.order === "asc" ? "ASC" : "DESC";
+
+    const rows = db
+      .prepare(
+        `SELECT * FROM tasks${whereSql}
+         ORDER BY ${sortColumn} ${order}, created_at DESC, id DESC
+         LIMIT ? OFFSET ?`,
+      )
+      .all(...params, pageSize, (page - 1) * pageSize) as unknown as TaskRow[];
+
+    return {
+      tasks: rows.map(mapTask),
+      total,
+      page,
+      pageSize,
+      totalPages,
+    };
   },
 
   remove(id: string): boolean {
