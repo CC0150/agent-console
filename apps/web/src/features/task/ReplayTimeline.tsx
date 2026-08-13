@@ -1,15 +1,8 @@
-import * as Select from "@radix-ui/react-select";
 import type { TaskEvent } from "@agent-console/contracts";
 import { Tooltip } from "../../components/ui/Tooltip";
-import {
-  Check,
-  ChevronDown,
-  ListFilter,
-  ListVideo,
-  Search,
-  X,
-} from "lucide-react";
+import { ListFilter, ListVideo, Search, X } from "lucide-react";
 import { useMemo } from "react";
+import { SelectField } from "../../components/ui/SelectField";
 import {
   EVENT_TYPE_LABELS,
   EVENT_TYPE_STYLES,
@@ -48,10 +41,6 @@ export function ReplayTimeline({
     () => new Map(events.map((event, index) => [event.seq, index])),
     [events],
   );
-  const currentFilterLabel =
-    REPLAY_FILTER_OPTIONS.find((option) => option.value === filter)?.label ??
-    "全部事件";
-
   return (
     <section className="panel overflow-hidden">
       <div className="panel-header">
@@ -71,51 +60,13 @@ export function ReplayTimeline({
 
       <div className="border-b border-ink-700/25 px-4 py-3">
         <div className="flex flex-wrap items-center gap-2">
-          <Select.Root
+          <SelectField
             value={filter}
             onValueChange={(value) => onFilterChange(value as ReplayFilter)}
-          >
-            <Select.Trigger
-              aria-label="事件类型筛选"
-              className="group inline-flex h-9 shrink-0 items-center justify-between gap-2 rounded-md border border-ink-700/30 bg-ink-950/70 px-3 text-ink-100 outline-none transition focus:border-signal-500/60 focus:ring-2 focus:ring-signal-500/15"
-            >
-              <span className="flex min-w-0 items-center gap-2">
-                <ListFilter className="h-3.5 w-3.5 shrink-0 text-ink-400 transition group-data-[state=open]:text-signal-400" />
-                <Select.Value asChild>
-                  <span className="truncate text-[13px] font-medium text-ink-200">
-                    {currentFilterLabel}
-                  </span>
-                </Select.Value>
-              </span>
-              <Select.Icon className="shrink-0 text-ink-400 transition group-data-[state=open]:rotate-180 group-data-[state=open]:text-signal-400">
-                <ChevronDown className="h-3.5 w-3.5" />
-              </Select.Icon>
-            </Select.Trigger>
-
-            <Select.Portal>
-              <Select.Content
-                position="popper"
-                sideOffset={6}
-                align="start"
-                className="z-50 max-h-[340px] overflow-hidden rounded-md border border-ink-600/50 bg-ink-850 p-1 shadow-[0_18px_48px_rgba(0,0,0,0.38)] data-[state=open]:animate-in"
-              >
-                <Select.Viewport className="p-0.5">
-                  {REPLAY_FILTER_OPTIONS.map((option) => (
-                    <Select.Item
-                      key={option.value}
-                      value={option.value}
-                      className="relative flex h-8 cursor-pointer select-none items-center rounded border border-transparent pr-8 pl-8 text-[13px] font-medium text-ink-300 outline-none transition data-[highlighted]:border-signal-500/20 data-[highlighted]:bg-signal-500/10 data-[highlighted]:text-signal-300 data-[state=checked]:text-signal-300"
-                    >
-                      <Select.ItemIndicator className="absolute left-2.5 inline-flex items-center">
-                        <Check className="h-3.5 w-3.5" />
-                      </Select.ItemIndicator>
-                      <Select.ItemText>{option.label}</Select.ItemText>
-                    </Select.Item>
-                  ))}
-                </Select.Viewport>
-              </Select.Content>
-            </Select.Portal>
-          </Select.Root>
+            options={REPLAY_FILTER_OPTIONS}
+            label="事件类型筛选"
+            icon={<ListFilter className="h-3.5 w-3.5" />}
+          />
 
           <div className="relative min-w-[220px] flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-400" />
