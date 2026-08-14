@@ -129,6 +129,34 @@ body {
   background: transparent;
 }
 
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 100;
+  display: inline-flex;
+  align-items: center;
+  height: 36px;
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  background: var(--color-ink-900);
+  padding: 0 14px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-ink-100);
+  box-shadow: var(--panel-shadow);
+}
+
+.skip-link:focus {
+  left: 16px;
+  top: 16px;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-signal-500);
+  outline-offset: 2px;
+}
+
 .scroll-active {
   scrollbar-color: var(--scrollbar-thumb) transparent;
 }
@@ -164,11 +192,27 @@ svg {
 
 .panel-header {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
+  gap: 0.5rem 0.75rem;
   min-height: 46px;
   border-bottom: 1px solid var(--panel-border);
-  padding: 0 18px;
+  padding: 0.625rem 14px;
+}
+
+.panel-header > * {
+  min-width: 0;
+}
+
+@media (min-width: 640px) {
+  .panel-header {
+    padding: 0.625rem 18px;
+  }
+}
+
+[role="dialog"]:focus-visible {
+  outline: none;
 }
 
 .eyebrow {
@@ -297,5 +341,16 @@ svg {
 @keyframes shimmer {
   to {
     transform: translateX(100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
   }
 }

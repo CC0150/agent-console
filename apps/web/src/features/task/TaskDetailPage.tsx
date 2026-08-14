@@ -7,6 +7,7 @@ import {
   History,
   Loader2,
   Trash2,
+  Wrench,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
@@ -28,6 +29,7 @@ import { EventLog } from "./EventLog";
 import { PlanTimeline } from "./PlanTimeline";
 import { StreamConsole } from "./StreamConsole";
 import { TaskActions } from "./TaskActions";
+import { TaskPageSkeleton } from "./TaskPageSkeleton";
 import { ToolCallCard } from "./ToolCallCard";
 
 export function TaskDetailPage() {
@@ -112,11 +114,7 @@ export function TaskDetailPage() {
   });
 
   if (taskQuery.isLoading) {
-    return (
-      <div className="flex h-72 items-center justify-center">
-        <Loader2 className="h-6 w-6 animate-spin text-signal-400" />
-      </div>
-    );
+    return <TaskPageSkeleton />;
   }
 
   if (!task) {
@@ -236,9 +234,12 @@ export function TaskDetailPage() {
               </span>
             </div>
             {toolCalls.length === 0 ? (
-              <div className="border-t border-dashed border-ink-700/30 px-4 py-8 text-center text-sm text-ink-400">
-                暂无工具调用
-              </div>
+              <EmptyState
+                compact
+                icon={Wrench}
+                title="暂无工具调用"
+                description="任务执行过程中会在这里展示工具调用详情"
+              />
             ) : (
               <div className="space-y-3 p-4">
                 {toolCalls.map((toolCall) => (

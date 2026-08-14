@@ -88,6 +88,6 @@ describe("ReplayTimeline", () => {
     );
 
     expect(countReplayEvents(html)).toBe(0);
-    expect(html).toContain("没有符合筛选条件的事件");
+    expect(html).toContain("没有匹配的事件");
   });
 });

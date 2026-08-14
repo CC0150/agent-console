@@ -9,6 +9,7 @@ interface EmptyStateProps {
   title: string;
   description: string;
   action?: ReactNode;
+  compact?: boolean;
 }
 
 export function EmptyState({
@@ -16,15 +17,34 @@ export function EmptyState({
   title,
   description,
   action,
+  compact = false,
 }: EmptyStateProps) {
   return (
-    <div className="panel flex flex-col items-center justify-center border-dashed px-6 py-12 text-center">
-      <span className="flex h-12 w-12 items-center justify-center rounded-md border border-signal-500/25 bg-signal-500/10 text-signal-400">
-        <Icon className="h-6 w-6" />
+    <div
+      className={`flex flex-col items-center justify-center text-center ${
+        compact
+          ? "border-t border-dashed border-ink-700/25 px-6 py-10"
+          : "panel border-dashed px-6 py-12"
+      }`}
+    >
+      <span
+        className={`flex items-center justify-center rounded-md border border-signal-500/25 bg-signal-500/10 text-signal-400 ${
+          compact ? "h-9 w-9" : "h-12 w-12"
+        }`}
+      >
+        <Icon className={compact ? "h-4 w-4" : "h-6 w-6"} />
       </span>
-      <p className="mt-4 text-sm font-semibold text-ink-100">{title}</p>
-      <p className="mt-1 text-xs text-ink-400">{description}</p>
-      {action ? <div className="mt-4">{action}</div> : null}
+      <p
+        className={`mt-4 font-semibold text-ink-100 ${
+          compact ? "text-xs" : "text-sm"
+        }`}
+      >
+        {title}
+      </p>
+      <p className={`mt-1 text-ink-400 ${compact ? "text-[11px]" : "text-xs"}`}>
+        {description}
+      </p>
+      {action ? <div className={compact ? "mt-3" : "mt-4"}>{action}</div> : null}
     </div>
   );
 }

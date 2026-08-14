@@ -153,7 +153,11 @@ export function TaskList({ tasks, total, isLoading, workspaces }: TaskListProps)
           </div>
           <span className="font-mono text-xs text-ink-400">加载中</span>
         </div>
-        <div className="space-y-3 p-5">
+        <div
+          role="status"
+          aria-label="正在加载任务列表"
+          className="space-y-3 p-5"
+        >
           {[0, 1, 2].map((index) => (
             <div key={index} className="skeleton h-14 rounded-md" />
           ))}

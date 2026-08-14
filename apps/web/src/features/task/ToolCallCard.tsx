@@ -7,7 +7,7 @@ import {
   Wrench,
   XCircle,
 } from "lucide-react";
-import { useState } from "react";
+import { useId, useState } from "react";
 
 const STATE_LABELS: Record<ToolCall["state"], string> = {
   requires_approval: "待审批",
@@ -29,6 +29,7 @@ const STATE_STYLES: Record<ToolCall["state"], string> = {
 
 export function ToolCallCard({ toolCall }: { toolCall: ToolCall }) {
   const [open, setOpen] = useState(false);
+  const contentId = useId();
   const duration =
     toolCall.durationMs == null ? null : `${(toolCall.durationMs / 1000).toFixed(1)}s`;
 
@@ -39,6 +40,8 @@ export function ToolCallCard({ toolCall }: { toolCall: ToolCall }) {
     >
       <button
         type="button"
+        aria-expanded={open}
+        aria-controls={contentId}
         className="flex w-full items-center gap-3 px-3.5 py-3 text-left transition hover:bg-ink-700/15"
         onClick={() => setOpen((value) => !value)}
       >
@@ -78,7 +81,10 @@ export function ToolCallCard({ toolCall }: { toolCall: ToolCall }) {
       </button>
 
       {open ? (
-        <div className="min-w-0 space-y-3 border-t border-ink-700/30 bg-ink-900/60 px-3.5 py-3">
+        <div
+          id={contentId}
+          className="min-w-0 space-y-3 border-t border-ink-700/30 bg-ink-900/60 px-3.5 py-3"
+        >
           <div className="min-w-0">
             <p className="eyebrow mb-1.5">输入</p>
             <pre className="max-w-full overflow-x-auto whitespace-pre-wrap rounded-md border border-ink-700/30 bg-ink-950 p-3 font-mono text-sm leading-6 text-ink-200">

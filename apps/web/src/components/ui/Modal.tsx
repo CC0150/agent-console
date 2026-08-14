@@ -30,6 +30,8 @@ export function Modal({
   tone = "default",
 }: ModalProps) {
   const titleId = useId();
+  const descriptionId = useId();
+  const dialogRef = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
 
@@ -37,10 +39,46 @@ export function Modal({
     if (!open) {
       return;
     }
-    // 弹窗打开期间监听 ESC 关闭，并锁定背景滚动
+    const dialog = dialogRef.current;
+    const previouslyFocused =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    dialog?.focus({ preventScroll: true });
+
+    const getFocusable = () => {
+      if (!dialog) {
+        return [];
+      }
+      return Array.from(
+        dialog.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ),
+      );
+    };
+
+    // 弹窗打开期间锁定背景滚动，并让 Tab / Shift+Tab 在弹窗内循环
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         onCloseRef.current();
+        return;
+      }
+      if (event.key !== "Tab") {
+        return;
+      }
+      const focusable = getFocusable();
+      if (focusable.length === 0) {
+        event.preventDefault();
+        dialog?.focus();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement;
+      if (event.shiftKey && (active === first || active === dialog)) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && active === last) {
+        event.preventDefault();
+        first.focus();
       }
     };
     const previousOverflow = document.body.style.overflow;
@@ -49,6 +87,7 @@ export function Modal({
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
       document.body.style.overflow = previousOverflow;
+      previouslyFocused?.focus();
     };
   }, [open]);
 
@@ -71,10 +110,13 @@ export function Modal({
         aria-hidden="true"
       />
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className={`relative w-full max-w-md overflow-hidden rounded-lg border bg-ink-900 shadow-[0_24px_80px_rgba(0,0,0,0.55)] ${borderClass}`}
+        aria-describedby={description ? descriptionId : undefined}
+        tabIndex={-1}
+        className={`relative w-full max-w-md overflow-hidden rounded-lg border bg-ink-900 shadow-[0_24px_80px_rgba(0,0,0,0.55)] outline-none ${borderClass}`}
       >
         <div className={`h-px w-full ${topLineClass}`} />
         <div className="flex items-start gap-3 px-5 pb-4 pt-5">
@@ -91,7 +133,10 @@ export function Modal({
               {title}
             </h2>
             {description ? (
-              <div className="mt-1.5 break-words text-sm leading-6 text-ink-400">
+              <div
+                id={descriptionId}
+                className="mt-1.5 break-words text-sm leading-6 text-ink-400"
+              >
                 {description}
               </div>
             ) : null}

@@ -22,7 +22,11 @@ export function ToolsPanel() {
       </div>
 
       {toolsQuery.isLoading ? (
-        <div className="space-y-3 p-5">
+        <div
+          role="status"
+          aria-label="正在加载工具列表"
+          className="space-y-3 p-5"
+        >
           {[0, 1].map((index) => (
             <div key={index} className="skeleton h-12 rounded-md" />
           ))}

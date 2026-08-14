@@ -1,8 +1,10 @@
 import type { TaskArtifact } from "@agent-console/contracts";
 import { Download, Eye, FileText, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { EmptyState } from "../../components/ui/EmptyState";
 import { ErrorBanner, toErrorMessage } from "../../components/ui/ErrorBanner";
 import { Modal } from "../../components/ui/Modal";
+import { Skeleton } from "../../components/ui/Skeleton";
 import { api } from "../../lib/api";
 
 interface ArtifactsPanelProps {
@@ -73,14 +75,22 @@ export function ArtifactsPanel({
       </div>
 
       {isLoading && artifacts.length === 0 ? (
-        <div className="flex items-center justify-center gap-2 border-t border-dashed border-ink-700/30 px-4 py-8 text-sm text-ink-400">
-          <Loader2 className="h-4 w-4 animate-spin text-signal-400" />
-          加载中
+        <div
+          role="status"
+          aria-label="正在加载产出物"
+          className="space-y-3 border-t border-ink-700/25 p-4"
+        >
+          {[0, 1, 2].map((index) => (
+            <Skeleton key={index} className="h-12 rounded-md" />
+          ))}
         </div>
       ) : artifacts.length === 0 ? (
-        <p className="border-t border-dashed border-ink-700/30 px-4 py-8 text-center text-sm text-ink-400">
-          暂无产出物
-        </p>
+        <EmptyState
+          compact
+          icon={FileText}
+          title="暂无产出物"
+          description="任务生成文件后会在这里展示"
+        />
       ) : (
         <div className="divide-y divide-ink-700/25">
           {artifacts.map((artifact) => (

@@ -1,6 +1,7 @@
 import type { TaskEvent } from "@agent-console/contracts";
 import { useDebouncedInput } from "../../hooks/useDebounce";
 import { Tooltip } from "../../components/ui/Tooltip";
+import { EmptyState } from "../../components/ui/EmptyState";
 import { ListFilter, ListVideo, Search, X } from "lucide-react";
 import { useMemo } from "react";
 import { SelectField } from "../../components/ui/SelectField";
@@ -98,9 +99,12 @@ export function ReplayTimeline({
 
       <div className="max-h-[620px] min-h-[300px] overflow-y-auto scroll-active">
         {visibleEvents.length === 0 ? (
-          <p className="px-5 py-12 text-center text-sm text-ink-400">
-            没有符合筛选条件的事件
-          </p>
+          <EmptyState
+            compact
+            icon={ListFilter}
+            title="没有匹配的事件"
+            description="调整筛选或搜索条件后重试"
+          />
         ) : (
           <ol className="px-4 py-3">
             {visibleEvents.map((event) => {
@@ -116,6 +120,8 @@ export function ReplayTimeline({
                   />
                   <button
                     type="button"
+                    aria-label={`跳转到第 ${event.seq} 条事件`}
+                    aria-current={current ? "step" : undefined}
                     onClick={() => onSeek(index)}
                     className={`relative z-10 flex w-full items-start gap-3 rounded-md py-3 pl-1 pr-3 text-left transition ${
                       current

@@ -43,6 +43,7 @@ import {
   type ReplayFilter,
 } from "./replayControls";
 import { StreamConsole } from "./StreamConsole";
+import { TaskPageSkeleton } from "./TaskPageSkeleton";
 import { ToolCallCard } from "./ToolCallCard";
 
 type ReplaySpeed = 1 | 2 | 4 | 8;
@@ -237,11 +238,7 @@ export function TaskReplayPage() {
   };
 
   if (taskQuery.isLoading) {
-    return (
-      <div className="flex h-72 items-center justify-center">
-        <Loader2 className="h-6 w-6 animate-spin text-signal-400" />
-      </div>
-    );
+    return <TaskPageSkeleton />;
   }
 
   if (!task) {
@@ -538,9 +535,12 @@ export function TaskReplayPage() {
               </span>
             </div>
             {toolCalls.length === 0 ? (
-              <p className="border-t border-dashed border-ink-700/30 px-4 py-8 text-center text-sm text-ink-400">
-                暂无工具调用
-              </p>
+              <EmptyState
+                compact
+                icon={Wrench}
+                title="暂无工具调用"
+                description="回放到对应事件时会在这里展示工具快照"
+              />
             ) : (
               <div className="max-h-[340px] space-y-3 overflow-y-auto scroll-active p-4">
                 {toolCalls.map((toolCall) => (
