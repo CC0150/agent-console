@@ -103,7 +103,14 @@ export class OpenAICompatibleProvider implements LLMProvider {
         throw error;
       }
       const message = error instanceof Error ? error.message : String(error);
-      throw new LLMRequestError(`LLM 网络请求失败: ${message}`, true);
+      const cause =
+        error instanceof Error && error.cause instanceof Error
+          ? (error.cause as Error & { code?: string | number })
+          : null;
+      const detail = cause
+        ? `${cause.message}${cause.code ? ` (${cause.code})` : ""}`
+        : message;
+      throw new LLMRequestError(`LLM 网络请求失败: ${detail}`, true);
     }
 
     if (!response.ok) {
