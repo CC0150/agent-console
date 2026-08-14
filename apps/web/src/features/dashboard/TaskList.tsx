@@ -112,10 +112,14 @@ export function TaskList({ tasks, total, isLoading, workspaces }: TaskListProps)
   const batchMutation = useMutation({
     mutationFn: ({ action, taskIds }: { action: BatchTaskAction; taskIds: string[] }) =>
       api.batchAction(action, taskIds),
-    onSuccess: () => {
+    onSuccess: (result) => {
       setSelectedIds(new Set());
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
       queryClient.invalidateQueries({ queryKey: ["stats"] });
+      for (const task of result.tasks ?? []) {
+        queryClient.invalidateQueries({ queryKey: ["events", task.id] });
+        queryClient.invalidateQueries({ queryKey: ["artifacts", task.id] });
+      }
     },
   });
   const rerunMutation = useMutation({
@@ -123,6 +127,8 @@ export function TaskList({ tasks, total, isLoading, workspaces }: TaskListProps)
     onSuccess: ({ task }) => {
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
       queryClient.invalidateQueries({ queryKey: ["stats"] });
+      queryClient.invalidateQueries({ queryKey: ["events", task.id] });
+      queryClient.invalidateQueries({ queryKey: ["artifacts", task.id] });
       navigate(`/tasks/${task.id}`);
     },
   });

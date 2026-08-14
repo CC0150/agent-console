@@ -108,6 +108,74 @@ describe("SSE 流接口", () => {
     await fetch(`${baseUrl}/api/tasks/${taskId}`, { method: "DELETE" });
   });
 
+  it("重跑复用原任务，不新增台账记录并清除旧事件与产出物", async () => {
+    const created = await postJson("/api/tasks", { goal: "重跑任务台账测试" });
+    expect(created.status).toBe(201);
+    const createdBody = (await created.json()) as { task: { id: string } };
+    const taskId = createdBody.task.id;
+
+    const firstStream = await fetch(`${baseUrl}/api/tasks/${taskId}/stream`, {
+      headers: { Accept: "text/event-stream" },
+    });
+    const firstEvents = await readStreamUntilTerminal(firstStream, taskId);
+    const oldEventIds = new Set(firstEvents.map((event) => event.id));
+
+    const beforeListResponse = await fetch(`${baseUrl}/api/tasks`);
+    const beforeList = (await beforeListResponse.json()) as { total: number };
+    const beforeArtifactsResponse = await fetch(`${baseUrl}/api/tasks/${taskId}/artifacts`);
+    const beforeArtifacts = (await beforeArtifactsResponse.json()) as {
+      artifacts: Array<{ id: string }>;
+    };
+    const oldArtifactIds = new Set(beforeArtifacts.artifacts.map((artifact) => artifact.id));
+    expect(oldArtifactIds.size).toBeGreaterThan(0);
+
+    const rerunResponse = await postJson(`/api/tasks/${taskId}/actions`, {
+      action: "rerun",
+    });
+    expect(rerunResponse.status).toBe(201);
+    const rerunBody = (await rerunResponse.json()) as {
+      task: {
+        id: string;
+        status: string;
+        currentStep: number;
+        totalSteps: number;
+        error: string | null;
+        startedAt: string | null;
+        finishedAt: string | null;
+      };
+    };
+    expect(rerunBody.task.id).toBe(taskId);
+    expect(rerunBody.task.status).toBe("queued");
+    expect(rerunBody.task.currentStep).toBe(0);
+    expect(rerunBody.task.totalSteps).toBe(0);
+    expect(rerunBody.task.error).toBeNull();
+    expect(rerunBody.task.startedAt).toBeNull();
+    expect(rerunBody.task.finishedAt).toBeNull();
+
+    const afterListResponse = await fetch(`${baseUrl}/api/tasks`);
+    const afterList = (await afterListResponse.json()) as { total: number };
+    expect(afterList.total).toBe(beforeList.total);
+
+    const rerunStream = await fetch(`${baseUrl}/api/tasks/${taskId}/stream`, {
+      headers: { Accept: "text/event-stream" },
+    });
+    const rerunEvents = await readStreamUntilTerminal(rerunStream, taskId);
+    expect(rerunEvents[0]?.type).toBe("task.created");
+    expect(rerunEvents[0]?.seq).toBe(1);
+    expect(rerunEvents.some((event) => oldEventIds.has(event.id))).toBe(false);
+    expect(rerunEvents.some((event) => event.type === "task.completed")).toBe(true);
+
+    const afterArtifactsResponse = await fetch(`${baseUrl}/api/tasks/${taskId}/artifacts`);
+    const afterArtifacts = (await afterArtifactsResponse.json()) as {
+      artifacts: Array<{ id: string }>;
+    };
+    expect(afterArtifacts.artifacts.some((artifact) => oldArtifactIds.has(artifact.id))).toBe(
+      false,
+    );
+
+    await fetch(`${baseUrl}/api/tasks/${taskId}`, { method: "DELETE" });
+  });
+
   it("任务不存在时返回 404", async () => {
     const response = await fetch(`${baseUrl}/api/tasks/not-found/stream`);
     expect(response.status).toBe(404);

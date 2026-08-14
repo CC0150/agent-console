@@ -94,7 +94,18 @@ export function TaskDetailPage() {
     mutationFn: (action: TaskAction) => api.action(taskId, action),
     onSuccess: ({ task: nextTask }, action) => {
       if (action === "rerun") {
-        navigate(`/tasks/${nextTask.id}`);
+        if (nextTask.id !== taskId) {
+          navigate(`/tasks/${nextTask.id}`);
+          return;
+        }
+        queryClient.setQueryData(["task", taskId], { task: nextTask });
+        queryClient.setQueryData(["events", taskId], { events: [] });
+        queryClient.setQueryData(["artifacts", taskId], { artifacts: [] });
+        queryClient.invalidateQueries({ queryKey: ["events", taskId] });
+        queryClient.invalidateQueries({ queryKey: ["artifacts", taskId] });
+        queryClient.invalidateQueries({ queryKey: ["tasks"] });
+        queryClient.invalidateQueries({ queryKey: ["stats"] });
+        connect(nextTask.id);
         return;
       }
       queryClient.setQueryData(["task", taskId], { task: nextTask });

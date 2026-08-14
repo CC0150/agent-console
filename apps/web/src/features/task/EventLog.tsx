@@ -1,13 +1,11 @@
+import { useVirtualizer } from "@tanstack/react-virtual";
 import type { TaskEvent } from "@agent-console/contracts";
-import { ChevronLeft, ChevronRight, ListOrdered } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { ListOrdered } from "lucide-react";
+import { useEffect, useRef } from "react";
 import { EmptyState } from "../../components/ui/EmptyState";
-import {
-  clampEventPage,
-  EVENT_LOG_PAGE_SIZE,
-  getEventPageItems,
-  getEventPageRange,
-} from "./eventPagination";
+
+const EVENT_ROW_HEIGHT = 40;
+const BOTTOM_SCROLL_THRESHOLD = 80;
 
 export const EVENT_TYPE_STYLES: Record<TaskEvent["type"], string> = {
   "task.created": "border-cyan-500/20 bg-cyan-500/10 text-cyan-300",
@@ -54,19 +52,26 @@ const TOOL_STATE_LABELS: Record<string, string> = {
 };
 
 export function EventLog({ events }: { events: TaskEvent[] }) {
-  const [page, setPage] = useState(1);
-  const totalPages = Math.max(1, Math.ceil(events.length / EVENT_LOG_PAGE_SIZE));
-  const showPagination = events.length > EVENT_LOG_PAGE_SIZE;
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const virtualizer = useVirtualizer({
+    count: events.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => EVENT_ROW_HEIGHT,
+    getItemKey: (index) => events[index].id,
+    overscan: 12,
+  });
 
   useEffect(() => {
-    setPage((current) => clampEventPage(current, events.length));
+    const element = scrollRef.current;
+    if (!element || events.length === 0) {
+      return;
+    }
+    const distanceFromBottom =
+      element.scrollHeight - element.scrollTop - element.clientHeight;
+    if (distanceFromBottom <= BOTTOM_SCROLL_THRESHOLD) {
+      element.scrollTop = element.scrollHeight;
+    }
   }, [events.length]);
-
-  const pageEvents = useMemo(
-    () => getEventPageItems(events, page),
-    [events, page],
-  );
-  const range = getEventPageRange(page, events.length, EVENT_LOG_PAGE_SIZE);
 
   return (
     <section className="panel overflow-hidden">
@@ -83,8 +88,8 @@ export function EventLog({ events }: { events: TaskEvent[] }) {
         </span>
       </div>
 
-      <div className="max-h-[420px] overflow-auto">
-        {pageEvents.length === 0 ? (
+      <div ref={scrollRef} className="max-h-[420px] overflow-auto">
+        {events.length === 0 ? (
           <EmptyState
             compact
             icon={ListOrdered}
@@ -92,69 +97,47 @@ export function EventLog({ events }: { events: TaskEvent[] }) {
             description="任务运行后会在这里展示实时事件"
           />
         ) : (
-          <ul className="divide-y divide-ink-700/25">
-            {pageEvents.map((event) => (
-              <li
-                key={event.id}
-                className="flex items-center gap-3 px-4 py-2.5 transition hover:bg-ink-700/15"
-              >
-                <span className="w-9 shrink-0 font-mono text-xs text-ink-500">
-                  #{event.seq}
-                </span>
-                <span
-                  className={`w-24 shrink-0 rounded border px-2 py-0.5 text-center font-mono text-[11px] font-medium sm:w-32 ${EVENT_TYPE_STYLES[event.type]}`}
+          <ul
+            className="relative w-full"
+            style={{ height: `${virtualizer.getTotalSize()}px` }}
+          >
+            {virtualizer.getVirtualItems().map((virtualRow) => {
+              const event = events[virtualRow.index];
+              return (
+                <li
+                  key={event.id}
+                  aria-posinset={virtualRow.index + 1}
+                  aria-setsize={events.length}
+                  className="absolute flex w-full items-center gap-3 border-b border-ink-700/25 px-4 py-2.5 transition hover:bg-ink-700/15"
+                  style={{
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                    width: "100%",
+                    height: `${virtualRow.size}px`,
+                    transform: `translateY(${virtualRow.start}px)`,
+                  }}
                 >
-                  {EVENT_TYPE_LABELS[event.type]}
-                </span>
-                <span className="min-w-0 flex-1 truncate font-mono text-xs text-ink-400">
-                  {summarizeEvent(event)}
-                </span>
-                <span className="hidden shrink-0 font-mono text-xs text-ink-500 sm:block">
-                  {new Date(event.createdAt).toLocaleTimeString("zh-CN")}
-                </span>
-              </li>
-            ))}
+                  <span className="w-9 shrink-0 font-mono text-xs text-ink-500">
+                    #{event.seq}
+                  </span>
+                  <span
+                    className={`w-24 shrink-0 rounded border px-2 py-0.5 text-center font-mono text-[11px] font-medium sm:w-32 ${EVENT_TYPE_STYLES[event.type]}`}
+                  >
+                    {EVENT_TYPE_LABELS[event.type]}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate font-mono text-xs text-ink-400">
+                    {summarizeEvent(event)}
+                  </span>
+                  <span className="hidden shrink-0 font-mono text-xs text-ink-500 sm:block">
+                    {new Date(event.createdAt).toLocaleTimeString("zh-CN")}
+                  </span>
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>
-
-      {showPagination ? (
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-ink-700/25 px-4 py-3">
-          <span className="font-mono text-xs text-ink-400">
-            显示 {range.start}-{range.end} / {events.length} 条
-          </span>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              aria-label="上一页事件"
-              disabled={page <= 1}
-              onClick={() => setPage((current) => Math.max(1, current - 1))}
-              className="inline-flex h-8 items-center gap-1 rounded-md border border-ink-700/30 bg-ink-700/5 px-2.5 text-xs font-medium text-ink-300 transition hover:border-signal-500/30 hover:text-signal-300 disabled:cursor-not-allowed disabled:opacity-35"
-            >
-              <ChevronLeft className="h-3.5 w-3.5" />
-              上一页
-            </button>
-            <span
-              aria-live="polite"
-              className="font-mono text-xs text-ink-300"
-            >
-              第 {page} / {totalPages} 页
-            </span>
-            <button
-              type="button"
-              aria-label="下一页事件"
-              disabled={page >= totalPages}
-              onClick={() =>
-                setPage((current) => Math.min(totalPages, current + 1))
-              }
-              className="inline-flex h-8 items-center gap-1 rounded-md border border-ink-700/30 bg-ink-700/5 px-2.5 text-xs font-medium text-ink-300 transition hover:border-signal-500/30 hover:text-signal-300 disabled:cursor-not-allowed disabled:opacity-35"
-            >
-              下一页
-              <ChevronRight className="h-3.5 w-3.5" />
-            </button>
-          </div>
-        </div>
-      ) : null}
     </section>
   );
 }

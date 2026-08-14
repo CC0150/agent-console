@@ -294,6 +294,10 @@ export const eventRepository = {
       payload: JSON.parse(row.payload),
     })) as TaskEvent[];
   },
+
+  deleteByTask(taskId: string): number {
+    return db.prepare("DELETE FROM task_events WHERE task_id = ?").run(taskId).changes;
+  },
 };
 
 export const workspaceRepository = {

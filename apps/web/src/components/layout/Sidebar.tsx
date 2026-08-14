@@ -86,9 +86,11 @@ export function Sidebar() {
 
   const rerunMutation = useMutation({
     mutationFn: (task: Task) => api.action(task.id, "rerun"),
-    onSuccess: () => {
+    onSuccess: ({ task }) => {
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
       queryClient.invalidateQueries({ queryKey: ["stats"] });
+      queryClient.invalidateQueries({ queryKey: ["events", task.id] });
+      queryClient.invalidateQueries({ queryKey: ["artifacts", task.id] });
     },
   });
   const deleteMutation = useMutation({

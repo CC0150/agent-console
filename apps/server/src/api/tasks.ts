@@ -87,7 +87,7 @@ tasksRouter.post("/batch/actions", (req, res) => {
 
   let processed = 0;
   let skipped = 0;
-  const createdTasks: Task[] = [];
+  const rerunTasks: Task[] = [];
 
   if (action === "delete") {
     for (const task of tasks) {
@@ -100,7 +100,7 @@ tasksRouter.post("/batch/actions", (req, res) => {
         skipped += 1;
         continue;
       }
-      createdTasks.push(createRerunTask(task));
+      rerunTasks.push(resetTaskForRerun(task));
       processed += 1;
     }
   } else {
@@ -123,7 +123,7 @@ tasksRouter.post("/batch/actions", (req, res) => {
     ok: true,
     processed,
     skipped,
-    ...(action === "rerun" ? { tasks: createdTasks } : {}),
+    ...(action === "rerun" ? { tasks: rerunTasks } : {}),
   });
 });
 
@@ -197,7 +197,10 @@ tasksRouter.post("/:id/actions", (req, res) => {
 
   const action = parsed.data.action;
   if (action === "rerun") {
-    res.status(201).json({ task: createRerunTask(task) });
+    if (!TERMINAL_STATUSES.includes(task.status)) {
+      throw new AppError(409, "task_cannot_rerun", "只有已完成、失败或已取消的任务可以重跑");
+    }
+    res.status(201).json({ task: resetTaskForRerun(task) });
     return;
   }
 
@@ -295,19 +298,27 @@ function retryTask(task: Task): boolean {
   return true;
 }
 
-function createRerunTask(task: Task): Task {
-  const created = withTransaction(() => {
-    const nextTask = taskRepository.create({
-      goal: task.goal,
-      model: task.model,
-      workspaceId: task.workspaceId,
+function resetTaskForRerun(task: Task): Task {
+  const reset = withTransaction(() => {
+    artifactRepository.deleteByTask(task.id);
+    eventRepository.deleteByTask(task.id);
+    const updated = taskRepository.update(task.id, {
+      status: "queued",
+      currentStep: 0,
+      totalSteps: 0,
+      error: null,
+      startedAt: null,
+      finishedAt: null,
     });
-    const event = createEvent(nextTask.id, "task.created", { task: nextTask });
-    return { task: nextTask, event };
+    if (!updated) {
+      throw new Error(`任务不存在: ${task.id}`);
+    }
+    const event = createEvent(task.id, "task.created", { task: updated });
+    return { task: updated, event };
   });
-  publishEvent(created.event);
-  TaskRunner.start(created.task);
-  return created.task;
+  publishEvent(reset.event);
+  TaskRunner.start(reset.task);
+  return reset.task;
 }
 
 tasksRouter.use("/:id/stream", streamRouter);

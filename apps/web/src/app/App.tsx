@@ -1,16 +1,32 @@
 /**
  * 应用根组件：负责路由分发与全局滚动行为。
  */
-import { useEffect } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { Route, Routes, useLocation } from "react-router-dom";
 import { ErrorBoundary } from "../components/ui/ErrorBoundary";
 import { Logo } from "../components/layout/Logo";
 import { RuntimeBadge } from "../components/layout/RuntimeBadge";
 import { Sidebar } from "../components/layout/Sidebar";
+import { Skeleton } from "../components/ui/Skeleton";
 import { ThemeToggle } from "../components/layout/ThemeToggle";
-import { DashboardPage } from "../features/dashboard/DashboardPage";
-import { TaskDetailPage } from "../features/task/TaskDetailPage";
-import { TaskReplayPage } from "../features/task/TaskReplayPage";
+
+const DashboardPage = lazy(() =>
+  import("../features/dashboard/DashboardPage").then((module) => ({
+    default: module.DashboardPage,
+  })),
+);
+
+const TaskDetailPage = lazy(() =>
+  import("../features/task/TaskDetailPage").then((module) => ({
+    default: module.TaskDetailPage,
+  })),
+);
+
+const TaskReplayPage = lazy(() =>
+  import("../features/task/TaskReplayPage").then((module) => ({
+    default: module.TaskReplayPage,
+  })),
+);
 
 export function App() {
   const location = useLocation();
@@ -70,19 +86,46 @@ export function App() {
           >
             <div className="mx-auto w-full max-w-[1480px] px-4 py-6 sm:px-6 lg:px-8">
               <ErrorBoundary resetKey={location.pathname}>
-                <Routes>
-                  <Route path="/" element={<DashboardPage />} />
-                  <Route path="/tasks/:taskId" element={<TaskDetailPage />} />
-                  <Route
-                    path="/tasks/:taskId/replay"
-                    element={<TaskReplayPage />}
-                  />
-                </Routes>
+                <Suspense fallback={<RouteFallback />}>
+                  <Routes>
+                    <Route path="/" element={<DashboardPage />} />
+                    <Route path="/tasks/:taskId" element={<TaskDetailPage />} />
+                    <Route
+                      path="/tasks/:taskId/replay"
+                      element={<TaskReplayPage />}
+                    />
+                  </Routes>
+                </Suspense>
               </ErrorBoundary>
             </div>
           </main>
         </div>
       </div>
     </>
+  );
+}
+
+function RouteFallback() {
+  return (
+    <div className="space-y-5" role="status" aria-label="正在加载页面">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div className="min-w-0 space-y-3">
+          <Skeleton className="h-3 w-28 rounded" />
+          <Skeleton className="h-9 w-64 max-w-full rounded" />
+          <Skeleton className="h-4 w-80 max-w-full rounded" />
+        </div>
+        <Skeleton className="h-10 w-44 rounded-md" />
+      </div>
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="min-w-0 space-y-5">
+          <Skeleton className="h-44 w-full rounded-md" />
+          <Skeleton className="h-80 w-full rounded-md" />
+        </div>
+        <div className="min-w-0 space-y-5">
+          <Skeleton className="h-48 w-full rounded-md" />
+          <Skeleton className="h-36 w-full rounded-md" />
+        </div>
+      </div>
+    </div>
   );
 }
