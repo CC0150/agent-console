@@ -14,26 +14,18 @@ interface StreamEndEvent {
 let tempDir: string;
 let baseUrl: string;
 let server: Server;
-let taskRepository: Awaited<typeof import("../db/repositories")>["taskRepository"];
-let approvalRepository: Awaited<
-  typeof import("../db/repositories")
->["approvalRepository"];
 
 beforeAll(async () => {
   tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "agent-console-integration-"));
   process.env.DATABASE_PATH = path.join(tempDir, "test.db");
   process.env.REPORTS_DIR = path.join(tempDir, "reports");
   process.env.LLM_PROVIDER = "mock";
-  process.env.APPROVAL_ENABLED = "true";
 
   const { migrate } = await import("../db/schema");
   migrate();
 
   const { createApp } = await import("../app");
   await import("../tools");
-  const repositories = await import("../db/repositories");
-  taskRepository = repositories.taskRepository;
-  approvalRepository = repositories.approvalRepository;
 
   const app = createApp();
   server = app.listen(0);
@@ -51,7 +43,7 @@ afterAll(async () => {
 
 describe("SSE 流接口", () => {
   it("通过 /api/tasks/:id/stream 推送完整事件并支持 Last-Event-ID 断点续传", async () => {
-    const created = await postJson("/api/tasks", { goal: "搜索杭州前端岗位要求" });
+    const created = await postJson("/api/tasks", { goal: "生成前端岗位调研报告" });
     expect(created.status).toBe(201);
     const task = (await created.json()) as { task: { id: string } };
     const taskId = task.task.id;
@@ -66,8 +58,6 @@ describe("SSE 流接口", () => {
     expect(events.some((event) => event.type === "task.created")).toBe(true);
     expect(events.some((event) => event.type === "task.plan_updated")).toBe(true);
     expect(events.some((event) => event.type === "tool.started")).toBe(true);
-    expect(events.some((event) => event.type === "approval.requested")).toBe(true);
-    expect(events.some((event) => event.type === "approval.resolved")).toBe(true);
     expect(events.some((event) => event.type === "tool.finished")).toBe(true);
     expect(events.some((event) => event.type === "message.delta")).toBe(true);
     expect(events.some((event) => event.type === "message.assistant")).toBe(true);
@@ -131,26 +121,6 @@ describe("SSE 流接口", () => {
     expect(response.status).toBe(400);
   });
 
-  it("拒绝跨任务审批其他任务的审批请求", async () => {
-    const taskA = taskRepository.create({ goal: "任务 A", model: "mock" });
-    const taskB = taskRepository.create({ goal: "任务 B", model: "mock" });
-    const approval = approvalRepository.create({
-      taskId: taskA.id,
-      toolCallId: "call-a",
-      toolName: "search_jobs",
-      input: { city: "杭州" },
-      reason: "测试审批",
-    });
-
-    const response = await postJson(`/api/tasks/${taskB.id}/approvals`, {
-      approvalId: approval.id,
-      decision: "approve",
-    });
-    expect(response.status).toBe(404);
-
-    taskRepository.remove(taskA.id);
-    taskRepository.remove(taskB.id);
-  });
 });
 
 async function postJson(urlPath: string, body: unknown): Promise<Response> {
@@ -191,22 +161,11 @@ async function readStreamUntilTerminal(
         sawEnd = true;
       } else if (parsed) {
         events.push(parsed);
-        if (parsed.type === "approval.requested") {
-          await approve(taskId, parsed.payload.approval.id);
-        }
       }
       boundary = buffer.indexOf("\n\n");
     }
   }
   return events;
-}
-
-async function approve(taskId: string, approvalId: string): Promise<void> {
-  const response = await postJson(`/api/tasks/${taskId}/approvals`, {
-    approvalId,
-    decision: "approve",
-  });
-  expect(response.status).toBe(200);
 }
 
 function parseSseBlock(block: string): TaskEvent | StreamEndEvent | null {

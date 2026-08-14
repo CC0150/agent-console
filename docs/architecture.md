@@ -10,9 +10,7 @@ flowchart LR
   API --> Runner[TaskRunner]
   Runner --> LLM[LLMProvider]
   Runner --> Registry[ToolRegistry]
-  Runner --> Approval[ApprovalGate]
-  Registry --> Tool[http_request, search_jobs]
-  Approval --> Web
+  Registry --> Tool[http_request, write_report]
   Repo --> DB[(SQLite)]
   EventBus --> SSE[SSE 客户端]
 ```
@@ -31,8 +29,6 @@ task.plan_updated
 task.status_changed
 tool.started
 tool.finished
-approval.requested
-approval.resolved
 message.delta
 message.assistant
 task.completed
@@ -50,13 +46,9 @@ queued -> planning -> running <-> paused
 
 非法迁移会被 `StateTransitionError` 拒绝。暂停是协作式暂停：只在步骤边界生效，不会中断正在执行的工具调用。
 
-### 人工审批
-
-工具可以声明 `requiresApproval`。执行前 Runner 会先写入 `approvals` 记录并推送 `approval.requested`，等待用户在 `POST /api/tasks/:id/approvals` 中批准或拒绝；审批结果写回事件流后工具才会继续执行。任务被取消时，待审批项会一并标记为 cancelled。
-
 ### ToolRegistry
 
-工具统一通过 `ToolRegistry` 注册，每个工具声明 `name`、`description`、`inputSchema` 和 `execute`。执行前用 zod 校验参数，工具列表也会传给 LLM 用于规划。内置 `http_request` 允许 Agent 在任务执行中调用外部 HTTP(S) API，并通过 `HTTP_TOOL_ALLOWED_HOSTS` 等环境变量限制目标地址、超时和响应大小。
+工具统一通过 `ToolRegistry` 注册，每个工具声明 `name`、`description`、`inputSchema` 和 `execute`。执行前用 zod 校验参数，工具列表也会传给 LLM 用于规划。内置 `http_request` 允许 Agent 在任务执行中调用外部 HTTP(S) API，并通过 `HTTP_TOOL_ALLOWED_HOSTS` 等环境变量限制目标地址、超时和响应大小；`write_report` 将报告内容保存为任务产出物。
 
 ### LLM Provider
 
@@ -73,8 +65,6 @@ queued -> planning -> running <-> paused
 - `tasks`：任务主表，保存目标、状态、进度和耗时
 - `workspaces`：工作区表，任务通过 `workspace_id` 分组
 - `task_events`：事件表，保存任务运行的全部事件
-- `approvals`：审批表，保存工具调用的人工审批记录
-- `job_postings`：本地职位库，供 `search_jobs` 工具检索
 
 ## 前端状态分工
 

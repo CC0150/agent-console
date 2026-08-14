@@ -22,7 +22,6 @@ import {
   mergeEvents,
 } from "../../lib/taskEvents";
 import { useRunStore } from "../../stores/runStore";
-import { ApprovalPanel } from "./ApprovalPanel";
 import { ArtifactsPanel } from "./ArtifactsPanel";
 import { ConversationView } from "./ConversationView";
 import { EventLog } from "./EventLog";
@@ -223,8 +222,6 @@ export function TaskDetailPage() {
         isPending={actionMutation.isPending}
         onAction={actionMutation.mutate}
       />
-
-      <ApprovalPanel taskId={task.id} />
 
       <div className="grid gap-5 xl:grid-cols-12">
         <div className="min-w-0 space-y-5 xl:col-span-4">

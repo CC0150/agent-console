@@ -1,6 +1,4 @@
 import type {
-  ApprovalDecision,
-  ApprovalRequest,
   BatchTaskAction,
   Task,
   TaskAction,
@@ -129,13 +127,6 @@ export const api = {
   },
   artifactDownloadUrl: (taskId: string, artifactId: string) =>
     `/api/tasks/${taskId}/artifacts/${artifactId}/content?download=1`,
-  getPendingApprovals: (taskId: string) =>
-    request<{ approvals: ApprovalRequest[] }>(`/tasks/${taskId}/approvals`),
-  resolveApproval: (taskId: string, approvalId: string, decision: ApprovalDecision) =>
-    request<{ ok: boolean }>(`/tasks/${taskId}/approvals`, {
-      method: "POST",
-      body: JSON.stringify({ approvalId, decision }),
-    }),
   getStats: (workspaceId?: string) =>
     request<TaskStats>(
       workspaceId ? `/stats?workspaceId=${encodeURIComponent(workspaceId)}` : "/stats",

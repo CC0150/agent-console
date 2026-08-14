@@ -6,7 +6,9 @@ function assistant(content: string, callId: string): ChatMessage {
   return {
     role: "assistant",
     content,
-    toolCalls: [{ id: callId, name: "search_jobs", arguments: { city: "杭州" } }],
+    toolCalls: [
+      { id: callId, name: "write_report", arguments: { title: "岗位调研报告" } },
+    ],
   };
 }
 
@@ -20,7 +22,7 @@ function tool(content: string, callId: string): ChatMessage {
 
 const messages: ChatMessage[] = [
   { role: "system", content: "系统提示" },
-  { role: "user", content: "搜索杭州前端岗位" },
+  { role: "user", content: "生成前端岗位调研报告" },
   assistant("第一轮", "call-1"),
   tool("结果一", "call-1"),
   assistant("第二轮", "call-2"),
@@ -47,7 +49,7 @@ describe("trimMessages", () => {
 
     expect(trimmed.map((message) => message.content)).toEqual([
       "系统提示",
-      "搜索杭州前端岗位",
+      "生成前端岗位调研报告",
       "第二轮",
       "结果二",
       "第三轮",
@@ -63,7 +65,7 @@ describe("trimMessages", () => {
 
     expect(trimmed.map((message) => message.content)).toEqual([
       "系统提示",
-      "搜索杭州前端岗位",
+      "生成前端岗位调研报告",
       "第三轮",
       "结果三",
     ]);

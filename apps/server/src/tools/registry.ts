@@ -42,7 +42,6 @@ export class ToolRegistry {
       name: tool.name,
       description: tool.description,
       parameters: zodToJsonSchema(tool.inputSchema),
-      ...(tool.requiresApproval ? { requiresApproval: true } : {}),
     }));
   }
 

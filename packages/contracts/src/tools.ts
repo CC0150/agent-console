@@ -49,7 +49,6 @@ export const ToolDefinition = z.object({
   name: z.string().min(1),
   description: z.string().min(1),
   parameters: z.record(z.unknown()).optional(),
-  requiresApproval: z.boolean().optional(),
 });
 
 export type ToolDefinition = z.infer<typeof ToolDefinition>;

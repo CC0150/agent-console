@@ -47,8 +47,8 @@ function fakeToolCall(id: string): ToolCall {
   return {
     id,
     taskId: "task-1",
-    toolName: "search_jobs",
-    input: { city: "杭州", keywords: ["前端"] },
+    toolName: "write_report",
+    input: { title: "岗位调研报告" },
     state: "succeeded",
     output: { count: 3 },
     error: null,
@@ -125,8 +125,8 @@ describe("replayControls", () => {
       {
         id: "step-1",
         title: "检索岗位",
-        toolName: "search_jobs",
-        input: { city: "杭州" },
+        toolName: "write_report",
+        input: { title: "岗位调研报告" },
       },
     ];
 
@@ -143,7 +143,7 @@ describe("replayControls", () => {
     expect(report).toContain("搜索杭州前端岗位");
     expect(report).toContain("默认工作区");
     expect(report).toContain("检索岗位");
-    expect(report).toContain("search_jobs");
+    expect(report).toContain("write_report");
     expect(report).toContain("杭州岗位要求如下");
     expect(report).toContain("`#3`");
   });

@@ -1,11 +1,5 @@
 import type { TaskEvent } from "@agent-console/contracts";
-import {
-  Bot,
-  Clock,
-  Loader2,
-  MessageSquareText,
-  User,
-} from "lucide-react";
+import { Bot, Loader2, MessageSquareText, User } from "lucide-react";
 import { useMemo } from "react";
 import { ToolCallCard } from "./ToolCallCard";
 import {
@@ -136,19 +130,6 @@ function renderItem(item: ConversationItem) {
     return (
       <div key={item.id} data-conversation-tool="true" className="min-w-0">
         <ToolCallCard toolCall={item.toolCall} />
-      </div>
-    );
-  }
-
-  if (item.approval) {
-    return (
-      <div
-        key={item.id}
-        data-conversation-tool="true"
-        className="flex items-center gap-2 rounded-md border border-amber-500/25 bg-amber-500/10 px-3 py-2 font-mono text-xs text-amber-300"
-      >
-        <Clock className="h-3.5 w-3.5" />
-        审批 {item.approval.status}
       </div>
     );
   }

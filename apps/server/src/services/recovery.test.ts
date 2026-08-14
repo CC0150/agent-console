@@ -7,7 +7,6 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 let tempDir: string;
 let taskRepository: Awaited<typeof import("../db/repositories")>["taskRepository"];
 let eventRepository: Awaited<typeof import("../db/repositories")>["eventRepository"];
-let approvalRepository: Awaited<typeof import("../db/repositories")>["approvalRepository"];
 let createEvent: typeof import("../services/events")["createEvent"];
 let recoverInterruptedTasks: () => number;
 
@@ -21,7 +20,6 @@ beforeAll(async () => {
   const repositories = await import("../db/repositories");
   taskRepository = repositories.taskRepository;
   eventRepository = repositories.eventRepository;
-  approvalRepository = repositories.approvalRepository;
 
   const eventsService = await import("../services/events");
   createEvent = eventsService.createEvent;
@@ -105,65 +103,14 @@ describe("服务重启恢复", () => {
     expect(recoverInterruptedTasks()).toBe(0);
   });
 
-  it("恢复时过期待处理审批并补发对应工具结束事件", () => {
-    const task = taskRepository.create({ goal: "审批中断任务", model: "mock" });
-    taskRepository.update(task.id, { status: "running" });
-    createEvent(task.id, "tool.started", {
-      toolCall: startedToolCall(task.id, "call-approval"),
-    });
-    const approval = approvalRepository.create({
-      taskId: task.id,
-      toolCallId: "call-approval",
-      toolName: "http_request",
-      input: { url: "https://example.com" },
-      reason: "测试审批",
-    });
-    createEvent(task.id, "approval.requested", { approval });
-    createEvent(task.id, "message.assistant", {
-      content: "需要调用外部接口",
-      toolCalls: [
-        {
-          id: "call-approval",
-          name: "http_request",
-          arguments: { url: "https://example.com" },
-        },
-      ],
-    });
-
-    expect(recoverInterruptedTasks()).toBe(1);
-
-    const recovered = taskRepository.findById(task.id);
-    expect(recovered?.status).toBe("failed");
-    expect(recovered?.currentStep).toBe(1);
-    expect(approvalRepository.findById(approval.id)?.status).toBe("expired");
-
-    const events = eventRepository.listByTask(task.id);
-    expect(
-      events.some(
-        (event) =>
-          event.type === "approval.resolved" &&
-          event.payload.approval.id === approval.id &&
-          event.payload.approval.status === "expired",
-      ),
-    ).toBe(true);
-
-    const finished = events
-      .filter(isToolFinishedEvent)
-      .filter((event) => event.payload.toolCall.id === "call-approval");
-    expect(finished).toHaveLength(1);
-    expect(finished[0].payload.toolCall).toMatchObject({
-      state: "rejected",
-      error: "服务重启，审批已过期",
-    });
-  });
 });
 
 function startedToolCall(taskId: string, id: string): ToolCall {
   return {
     id,
     taskId,
-    toolName: "search_jobs",
-    input: { city: "杭州" },
+    toolName: "write_report",
+    input: { title: "岗位调研报告" },
     state: "running",
     output: null,
     error: null,

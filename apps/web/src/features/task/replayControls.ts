@@ -80,9 +80,9 @@ const STATUS_LABELS: Record<Task["status"], string> = {
 };
 
 const TOOL_STATE_LABELS: Record<ToolCall["state"], string> = {
+  requires_approval: "待审批",
   pending: "等待中",
   running: "执行中",
-  requires_approval: "待审批",
   rejected: "已拒绝",
   succeeded: "成功",
   failed: "失败",

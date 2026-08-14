@@ -17,8 +17,6 @@ export const writeReportTool: Tool<WriteReportInput> = {
   description:
     "生成 Markdown 或文本报告并保存为任务产出物，任务结束后可在详情页预览和下载",
   inputSchema: WriteReportInput,
-  requiresApproval: config.approvalEnabled,
-  approvalReason: "生成文件到本地 reports 目录，请确认报告内容和文件名",
   async execute(input, ctx) {
     if (ctx.signal.aborted) {
       throw new Error("任务已取消，取消生成报告");

@@ -12,8 +12,6 @@
 | GET | `/tasks/:id` | 任务详情 |
 | GET | `/tasks/:id/events` | 任务事件列表，用于历史回放 |
 | POST | `/tasks/:id/actions` | 任务控制，body 为 `{ "action": "pause" \| "resume" \| "cancel" \| "rerun" }` |
-| GET | `/tasks/:id/approvals` | 任务待审批列表 |
-| POST | `/tasks/:id/approvals` | 审批工具调用，body 为 `{ "approvalId": "...", "decision": "approve" \| "reject" }` |
 | GET | `/workspaces` | 工作区列表 |
 | POST | `/workspaces` | 创建工作区，body 为 `{ "name": "...", "description": "..." }` |
 | DELETE | `/workspaces/:id` | 删除工作区，任务自动移到默认工作区 |
@@ -32,7 +30,7 @@ event: tool.started
 data: {"id":"...","taskId":"...","seq":4,"createdAt":"...","type":"tool.started","payload":{"toolCall":{...}}}
 ```
 
-任务进入终态后，SSE 会推送 `stream.end` 并关闭连接；审批工具会推送 `approval.requested` / `approval.resolved` 事件。
+任务进入终态后，SSE 会推送 `stream.end` 并关闭连接。
 
 浏览器 `EventSource` 会自动维护 `Last-Event-ID`，重连时从断点之后的事件继续推送。
 

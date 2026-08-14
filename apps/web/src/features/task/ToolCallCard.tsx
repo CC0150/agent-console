@@ -10,18 +10,18 @@ import {
 import { useState } from "react";
 
 const STATE_LABELS: Record<ToolCall["state"], string> = {
+  requires_approval: "待审批",
   pending: "等待中",
   running: "执行中",
-  requires_approval: "待审批",
   rejected: "已拒绝",
   succeeded: "成功",
   failed: "失败",
 };
 
 const STATE_STYLES: Record<ToolCall["state"], string> = {
+  requires_approval: "border-amber-500/25 bg-amber-500/10 text-amber-300",
   pending: "border-ink-700/30 text-ink-300",
   running: "border-cyan-500/25 bg-cyan-500/10 text-cyan-300",
-  requires_approval: "border-amber-500/30 bg-amber-500/10 text-amber-300",
   rejected: "border-rose-500/25 bg-rose-500/10 text-rose-300",
   succeeded: "border-mint-500/25 bg-mint-500/10 text-mint-300",
   failed: "border-rose-500/25 bg-rose-500/10 text-rose-300",
@@ -67,8 +67,6 @@ export function ToolCallCard({ toolCall }: { toolCall: ToolCall }) {
           <XCircle className="h-4 w-4 shrink-0 text-rose-400" />
         ) : toolCall.state === "rejected" ? (
           <XCircle className="h-4 w-4 shrink-0 text-rose-400" />
-        ) : toolCall.state === "requires_approval" ? (
-          <Clock className="h-4 w-4 shrink-0 text-amber-400" />
         ) : toolCall.state === "succeeded" ? (
           <CheckCircle2 className="h-4 w-4 shrink-0 text-mint-400" />
         ) : null}

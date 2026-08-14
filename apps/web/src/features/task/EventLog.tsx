@@ -7,8 +7,6 @@ export const EVENT_TYPE_STYLES: Record<TaskEvent["type"], string> = {
   "task.status_changed": "border-signal-500/20 bg-signal-500/10 text-signal-300",
   "tool.started": "border-cyan-500/20 bg-cyan-500/10 text-cyan-300",
   "tool.finished": "border-mint-500/20 bg-mint-500/10 text-mint-300",
-  "approval.requested": "border-amber-500/25 bg-amber-500/10 text-amber-300",
-  "approval.resolved": "border-violet-500/25 bg-violet-500/10 text-violet-300",
   "message.delta": "border-ink-700/30 bg-ink-700/10 text-ink-300",
   "message.assistant": "border-ink-600/30 bg-ink-700/10 text-ink-200",
   "artifact.created": "border-violet-500/25 bg-violet-500/10 text-violet-300",
@@ -22,8 +20,6 @@ export const EVENT_TYPE_LABELS: Record<TaskEvent["type"], string> = {
   "task.status_changed": "状态变更",
   "tool.started": "工具启动",
   "tool.finished": "工具结束",
-  "approval.requested": "审批请求",
-  "approval.resolved": "审批完成",
   "message.delta": "增量输出",
   "message.assistant": "助手消息",
   "artifact.created": "产出物",
@@ -44,18 +40,9 @@ const STATUS_LABELS: Record<string, string> = {
 const TOOL_STATE_LABELS: Record<string, string> = {
   pending: "等待中",
   running: "执行中",
-  requires_approval: "待审批",
   rejected: "已拒绝",
   succeeded: "成功",
   failed: "失败",
-};
-
-const APPROVAL_LABELS: Record<string, string> = {
-  pending: "待处理",
-  approved: "已批准",
-  rejected: "已拒绝",
-  cancelled: "已取消",
-  expired: "已超时",
 };
 
 export function EventLog({ events }: { events: TaskEvent[] }) {
@@ -119,10 +106,6 @@ export function summarizeEvent(event: TaskEvent): string {
       return `启动工具：${event.payload.toolCall.toolName}`;
     case "tool.finished":
       return `${event.payload.toolCall.toolName} ${TOOL_STATE_LABELS[event.payload.toolCall.state] ?? event.payload.toolCall.state}`;
-    case "approval.requested":
-      return `等待审批：${event.payload.approval.toolName}`;
-    case "approval.resolved":
-      return `${event.payload.approval.toolName} ${APPROVAL_LABELS[event.payload.approval.status] ?? event.payload.approval.status}`;
     case "task.status_changed":
       return `${STATUS_LABELS[event.payload.from] ?? event.payload.from} -> ${STATUS_LABELS[event.payload.to] ?? event.payload.to}`;
     case "task.completed":

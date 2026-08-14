@@ -2,8 +2,6 @@ import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import {
-  ApprovalRequest,
-  ApprovalStatus,
   TaskStatus,
   TaskArtifact,
   type Task,
@@ -11,8 +9,6 @@ import {
   type TaskListQuery,
   type TaskSortField,
   type TaskStatus as TaskStatusType,
-  type ApprovalRequest as ApprovalRequestType,
-  type ApprovalStatus as ApprovalStatusType,
   type Workspace,
 } from "@agent-console/contracts";
 import { config } from "../config";
@@ -48,19 +44,6 @@ interface WorkspaceRow {
   description: string;
   created_at: string;
   updated_at: string;
-}
-
-interface ApprovalRow {
-  id: string;
-  task_id: string;
-  tool_call_id: string;
-  tool_name: string;
-  input: string;
-  reason: string;
-  status: string;
-  requested_at: string;
-  expires_at: string | null;
-  resolved_at: string | null;
 }
 
 interface ArtifactRow {
@@ -362,82 +345,6 @@ export const workspaceRepository = {
   },
 };
 
-export const approvalRepository = {
-  create(input: Omit<ApprovalRequestType, "id" | "status" | "requestedAt" | "resolvedAt">): ApprovalRequestType {
-    const now = new Date().toISOString();
-    const expiresAt = new Date(Date.now() + config.approvalTimeoutMs).toISOString();
-    const approval: ApprovalRequestType = {
-      ...input,
-      id: randomUUID(),
-      status: "pending",
-      requestedAt: now,
-      resolvedAt: null,
-      expiresAt,
-    };
-    db.prepare(
-      `INSERT INTO approvals
-        (id, task_id, tool_call_id, tool_name, input, reason, status, requested_at, expires_at, resolved_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
-    ).run(
-      approval.id,
-      approval.taskId,
-      approval.toolCallId,
-      approval.toolName,
-      JSON.stringify(approval.input),
-      approval.reason,
-      approval.status,
-      approval.requestedAt,
-      approval.expiresAt,
-    );
-    return approval;
-  },
-
-  listPendingByTask(taskId: string): ApprovalRequestType[] {
-    const rows = db
-      .prepare(
-        `SELECT * FROM approvals
-         WHERE task_id = ? AND status = 'pending'
-         ORDER BY requested_at ASC`,
-      )
-      .all(taskId) as unknown as ApprovalRow[];
-    return rows.map(mapApproval);
-  },
-
-  findById(id: string): ApprovalRequestType | null {
-    const row = db.prepare("SELECT * FROM approvals WHERE id = ?").get(id) as
-      | ApprovalRow
-      | undefined;
-    return row ? mapApproval(row) : null;
-  },
-
-  resolve(id: string, status: ApprovalStatusType): ApprovalRequestType | null {
-    const resolvedAt = new Date().toISOString();
-    const changed = db
-      .prepare(
-        `UPDATE approvals
-         SET status = ?, resolved_at = ?
-         WHERE id = ? AND status = 'pending'`,
-      )
-      .run(status, resolvedAt, id).changes;
-    if (changed === 0) {
-      return null;
-    }
-    const approval = this.findById(id);
-    return approval ? { ...approval, resolvedAt } : null;
-  },
-
-  cancelPendingByTask(taskId: string): number {
-    const resolvedAt = new Date().toISOString();
-    return db
-      .prepare(
-        `UPDATE approvals
-         SET status = 'cancelled', resolved_at = ?
-         WHERE task_id = ? AND status = 'pending'`,
-      )
-      .run(resolvedAt, taskId).changes;
-  },
-};
-
 /**
  * 产出物仓储：负责把工具生成的文件写入 reports 目录，
  * 同时在数据库中登记元数据，便于任务详情页预览和下载。
@@ -538,21 +445,6 @@ function mapWorkspace(row: WorkspaceRow): Workspace {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
-}
-
-function mapApproval(row: ApprovalRow): ApprovalRequestType {
-  return ApprovalRequest.parse({
-    id: row.id,
-    taskId: row.task_id,
-    toolCallId: row.tool_call_id,
-    toolName: row.tool_name,
-    input: JSON.parse(row.input),
-    reason: row.reason,
-    status: ApprovalStatus.parse(row.status),
-    requestedAt: row.requested_at,
-    resolvedAt: row.resolved_at,
-    expiresAt: row.expires_at ?? undefined,
-  });
 }
 
 function mapArtifact(row: ArtifactRow): TaskArtifact {

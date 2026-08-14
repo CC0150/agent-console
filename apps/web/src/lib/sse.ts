@@ -6,8 +6,6 @@ const TASK_EVENT_TYPES = [
   "task.status_changed",
   "tool.started",
   "tool.finished",
-  "approval.requested",
-  "approval.resolved",
   "message.delta",
   "message.assistant",
   "task.completed",

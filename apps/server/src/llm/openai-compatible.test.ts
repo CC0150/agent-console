@@ -47,8 +47,8 @@ beforeAll(async () => {
                     index: 0,
                     id: "call_1",
                     function: {
-                      name: "search_jobs",
-                      arguments: '{"city":"杭州"',
+                      name: "http_request",
+                      arguments: '{"url":"https://example.com"',
                     },
                   },
                 ],
@@ -65,7 +65,7 @@ beforeAll(async () => {
                   {
                     index: 0,
                     function: {
-                      arguments: ',"limit":5}',
+                      arguments: ',"timeoutMs":5000}',
                     },
                   },
                 ],
@@ -107,13 +107,13 @@ describe("OpenAICompatibleProvider", () => {
     const result = await provider.chat({
       messages: [
         { role: "system", content: "你是 Agent" },
-        { role: "user", content: "搜索杭州前端岗位" },
+        { role: "user", content: "调用外部接口获取数据" },
       ],
       tools: [
         {
-          name: "search_jobs",
-          description: "检索岗位",
-          parameters: { type: "object" },
+          name: "http_request",
+          description: "调用外部 HTTP API",
+          parameters: { type: "object", properties: { url: { type: "string" } } },
         },
       ],
       onDelta: (delta) => deltas.push(delta),
@@ -124,8 +124,8 @@ describe("OpenAICompatibleProvider", () => {
     expect(result.toolCalls).toEqual([
       {
         id: "call_1",
-        name: "search_jobs",
-        arguments: { city: "杭州", limit: 5 },
+        name: "http_request",
+        arguments: { url: "https://example.com", timeoutMs: 5000 },
       },
     ]);
     expect(result.finishReason).toBe("tool_calls");

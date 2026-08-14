@@ -17,8 +17,6 @@ export const httpRequestTool: Tool<HttpRequestInput> = {
   name: "http_request",
   description: "调用外部 HTTP(S) API，返回状态码、响应头和解析后的 JSON 或文本内容",
   inputSchema: HttpRequestInput,
-  requiresApproval: config.approvalEnabled,
-  approvalReason: "调用外部 HTTP API，请确认目标地址、请求头和请求体",
   async execute(input, ctx) {
     assertAllowedHost(input.url);
 

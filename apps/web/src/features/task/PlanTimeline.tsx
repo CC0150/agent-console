@@ -1,12 +1,5 @@
 import type { PlanStep, Task, ToolCall } from "@agent-console/contracts";
-import {
-  CheckCircle2,
-  Clock,
-  Loader2,
-  Play,
-  Wrench,
-  XCircle,
-} from "lucide-react";
+import { CheckCircle2, Loader2, Play, Wrench, XCircle } from "lucide-react";
 
 interface PlanTimelineProps {
   plan: PlanStep[];
@@ -109,9 +102,6 @@ export function PlanTimeline({
 function renderState(state: ToolCall["state"] | "pending", index: number) {
   if (state === "running") {
     return <Loader2 className="h-4 w-4 animate-spin text-cyan-400" />;
-  }
-  if (state === "requires_approval") {
-    return <Clock className="h-4 w-4 text-amber-400" />;
   }
   if (state === "succeeded") {
     return <CheckCircle2 className="h-4 w-4 text-mint-400" />;

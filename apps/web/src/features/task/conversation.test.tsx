@@ -1,15 +1,14 @@
 import type {
-  ApprovalRequest,
   TaskEvent,
   ToolCall,
 } from "@agent-console/contracts";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { ConversationView } from "./ConversationView";
-import { buildConversation, toDisplayToolCall } from "./conversation";
+import { buildConversation } from "./conversation";
 
 const CREATED_AT = "2026-08-13T00:00:00.000Z";
-const GOAL = "查找杭州岗位";
+const GOAL = "生成前端岗位调研报告";
 
 function event(
   seq: number,
@@ -27,41 +26,22 @@ function event(
 }
 
 function assistantToolCall(id: string) {
-  return { id, name: "search_jobs", arguments: { city: "杭州" } };
+  return { id, name: "write_report", arguments: { title: "岗位调研报告" } };
 }
 
 function toolCall(id: string, options: Partial<ToolCall> = {}): ToolCall {
   return {
     id,
     taskId: "task-1",
-    toolName: "search_jobs",
-    input: { city: "杭州" },
+    toolName: "write_report",
+    input: { title: "岗位调研报告" },
     state: "succeeded",
-    output: "职位列表",
+    output: "报告已生成",
     error: null,
     startedAt: CREATED_AT,
     finishedAt: CREATED_AT,
     durationMs: 100,
     ...options,
-  };
-}
-
-function approval(
-  id: string,
-  toolCallId: string,
-  status: ApprovalRequest["status"],
-  reason: string,
-): ApprovalRequest {
-  return {
-    id,
-    taskId: "task-1",
-    toolCallId,
-    toolName: "search_jobs",
-    input: { city: "杭州" },
-    reason,
-    status,
-    requestedAt: CREATED_AT,
-    resolvedAt: CREATED_AT,
   };
 }
 
@@ -168,50 +148,15 @@ describe("buildConversation", () => {
     expect(assistant?.streaming).toBe(false);
   });
 
-  it("审批拒绝后工具调用状态为已拒绝并带回原因", () => {
-    const display = toDisplayToolCall({
-      request: assistantToolCall("assistant-1"),
-      execution: toolCall("exec-1", {
-        assistantCallId: "assistant-1",
-        state: "running",
-        output: null,
-        startedAt: CREATED_AT,
-        finishedAt: null,
-        durationMs: null,
-      }),
-      approval: approval("approval-1", "exec-1", "rejected", "该操作不允许"),
-    });
-
-    expect(display.state).toBe("rejected");
-    expect(display.error).toBe("该操作不允许");
-  });
-
-  it("审批超时后工具调用状态为已拒绝并带回原因", () => {
-    const display = toDisplayToolCall({
-      request: assistantToolCall("assistant-1"),
-      execution: toolCall("exec-1", {
-        assistantCallId: "assistant-1",
-        state: "running",
-        output: null,
-        startedAt: CREATED_AT,
-        finishedAt: null,
-        durationMs: null,
-      }),
-      approval: approval("approval-1", "exec-1", "expired", "审批超时，已自动拒绝"),
-    });
-
-    expect(display.state).toBe("rejected");
-    expect(display.error).toBe("审批超时，已自动拒绝");
-  });
 });
 
 describe("ConversationView", () => {
-  it("审批拒绝后工具调用显示为已拒绝", () => {
+  it("渲染助手请求与工具执行结果", () => {
     const html = renderToStaticMarkup(
       <ConversationView
         events={[
           event(1, "message.assistant", {
-            content: "请求审批",
+            content: "开始生成报告",
             toolCalls: [assistantToolCall("assistant-1")],
           }),
           event(2, "tool.started", {
@@ -224,8 +169,11 @@ describe("ConversationView", () => {
               durationMs: null,
             }),
           }),
-          event(3, "approval.resolved", {
-            approval: approval("approval-1", "exec-1", "rejected", "该操作不允许"),
+          event(3, "tool.finished", {
+            toolCall: toolCall("exec-1", {
+              assistantCallId: "assistant-1",
+              output: "报告已生成",
+            }),
           }),
         ]}
         goal={GOAL}
@@ -233,6 +181,7 @@ describe("ConversationView", () => {
       />,
     );
 
-    expect(html).toContain("已拒绝");
+    expect(html).toContain("write_report");
+    expect(html).toContain("成功");
   });
 });

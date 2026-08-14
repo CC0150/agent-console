@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto";
 import type {
-  ApprovalRequest,
   PlanStep,
   Task,
   TaskEvent,
@@ -10,7 +9,6 @@ import type {
 import { TaskArtifact } from "@agent-console/contracts";
 import { config } from "../config";
 import {
-  approvalRepository,
   eventRepository,
   taskRepository,
   withTransaction,
@@ -42,21 +40,10 @@ export interface RunnerRecoveryState {
   messages: ChatMessage[];
 }
 
-type ApprovalOutcome = {
-  decision: "approved" | "rejected" | "cancelled" | "expired";
-  reason: string;
-};
-
 export class TaskRunner {
   private static readonly activeRunners = new Map<string, TaskRunner>();
-  private static readonly pendingApprovals = new Map<
-    string,
-    (outcome: ApprovalOutcome) => void
-  >();
 
   private readonly abortController = new AbortController();
-  private readonly pendingApprovalIds = new Set<string>();
-  private readonly approvalTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private pauseRequested = false;
   private resumeWaiter: (() => void) | null = null;
   private readonly plan: PlanStep[] = [];
@@ -110,18 +97,6 @@ export class TaskRunner {
     return TaskRunner.activeRunners.get(taskId) ?? null;
   }
 
-  static resolveApproval(approvalId: string, decision: "approve" | "reject"): boolean {
-    const resolve = TaskRunner.pendingApprovals.get(approvalId);
-    if (!resolve) {
-      return false;
-    }
-    resolve({
-      decision: decision === "approve" ? "approved" : "rejected",
-      reason: "用户已处理审批",
-    });
-    return true;
-  }
-
   static async shutdown(timeoutMs = 10_000): Promise<void> {
     const deadline = Date.now() + timeoutMs;
     for (const runner of [...TaskRunner.activeRunners.values()]) {
@@ -149,18 +124,6 @@ export class TaskRunner {
     this.pauseRequested = true;
     this.resumeWaiter?.();
     this.resumeWaiter = null;
-    for (const approvalId of this.pendingApprovalIds) {
-      const resolve = TaskRunner.pendingApprovals.get(approvalId);
-      if (resolve) {
-        TaskRunner.pendingApprovals.delete(approvalId);
-        resolve({ decision: "cancelled", reason: "任务已取消" });
-      }
-    }
-    this.pendingApprovalIds.clear();
-    for (const timer of this.approvalTimers.values()) {
-      clearTimeout(timer);
-    }
-    this.approvalTimers.clear();
     this.abortController.abort();
   }
 
@@ -296,55 +259,6 @@ export class TaskRunner {
     await this.emit("tool.started", { toolCall: record });
 
     try {
-      const tool = toolRegistry.get(toolCall.name);
-      if (tool.requiresApproval) {
-        const requested = withTransaction(() => {
-          const approval = approvalRepository.create({
-            taskId: this.taskId,
-            toolCallId: record.id,
-            toolName: toolCall.name,
-            input: toolCall.arguments,
-            reason: tool.approvalReason ?? `工具 ${toolCall.name} 需要人工审批`,
-          });
-          const event = createEvent(this.taskId, "approval.requested", { approval });
-          return { approval, event };
-        });
-        publishEvent(requested.event);
-
-        const outcome = await this.waitForApproval(requested.approval);
-        const resolvedEvent = withTransaction(() => {
-          const resolved = approvalRepository.resolve(requested.approval.id, outcome.decision);
-          if (!resolved) {
-            return null;
-          }
-          return createEvent(this.taskId, "approval.resolved", { approval: resolved });
-        });
-        if (resolvedEvent) {
-          publishEvent(resolvedEvent);
-        }
-
-        if (
-          outcome.decision === "rejected" ||
-          outcome.decision === "cancelled" ||
-          outcome.decision === "expired"
-        ) {
-          const rejectedCall: ToolCall = {
-            ...record,
-            state: "rejected",
-            error:
-              outcome.decision === "rejected"
-                ? "用户拒绝了工具调用"
-                : outcome.decision === "expired"
-                  ? "审批超时，已自动拒绝"
-                  : outcome.reason,
-            finishedAt: new Date().toISOString(),
-            durationMs: 0,
-          };
-          await this.finishToolCall(rejectedCall);
-          return { ok: false, error: rejectedCall.error };
-        }
-      }
-
       const output = await toolRegistry.run(toolCall.name, toolCall.arguments, {
         taskId: this.taskId,
         signal: this.abortController.signal,
@@ -390,33 +304,6 @@ export class TaskRunner {
       return createEvent(this.taskId, "tool.finished", { toolCall });
     });
     publishEvent(event);
-  }
-
-  private waitForApproval(approval: ApprovalRequest): Promise<ApprovalOutcome> {
-    return new Promise((resolve) => {
-      let settled = false;
-      const settle = (outcome: ApprovalOutcome) => {
-        if (settled) {
-          return;
-        }
-        settled = true;
-        const timer = this.approvalTimers.get(approval.id);
-        if (timer) {
-          clearTimeout(timer);
-          this.approvalTimers.delete(approval.id);
-        }
-        TaskRunner.pendingApprovals.delete(approval.id);
-        this.pendingApprovalIds.delete(approval.id);
-        resolve(outcome);
-      };
-      const timer = setTimeout(() => {
-        settle({ decision: "expired", reason: "审批超时，已自动拒绝" });
-      }, config.approvalTimeoutMs);
-      timer.unref?.();
-      this.approvalTimers.set(approval.id, timer);
-      TaskRunner.pendingApprovals.set(approval.id, settle);
-      this.pendingApprovalIds.add(approval.id);
-    });
   }
 
   private async transition(to: TaskStatus, extra: TaskPatch = {}): Promise<void> {
@@ -551,8 +438,5 @@ function toolOutputForMessage(call: ToolCall): unknown {
 }
 
 function toolCallTitle(toolCall: AssistantToolCall): string {
-  if (toolCall.name === "search_jobs") {
-    return "检索岗位";
-  }
   return `调用 ${toolCall.name}`;
 }

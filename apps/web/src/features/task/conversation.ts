@@ -1,5 +1,4 @@
 import type {
-  ApprovalRequest,
   AssistantToolCall,
   TaskEvent,
   ToolCall,
@@ -9,7 +8,6 @@ import type {
 export interface ConversationToolCall {
   request: AssistantToolCall;
   execution?: ToolCall;
-  approval?: ApprovalRequest;
 }
 
 export interface ConversationItem {
@@ -23,7 +21,6 @@ export interface ConversationItem {
   usage?: Usage;
   toolCalls?: ConversationToolCall[];
   toolCall?: ToolCall;
-  approval?: ApprovalRequest;
 }
 
 const TERMINAL_STATUSES = new Set(["completed", "failed", "cancelled"]);
@@ -31,7 +28,7 @@ const TERMINAL_STATUSES = new Set(["completed", "failed", "cancelled"]);
 /**
  * 把任务事件流组装为对话视图：
  * - 任务目标作为首条用户消息；
- * - 助手消息携带请求的工具调用，工具执行/审批结果回填到对应调用；
+ * - 助手消息携带请求的工具调用，工具执行结果回填到对应调用；
  * - 尚未结束的 message.delta 合并为一条流式助手消息；
  * - 已进入终态的任务即使缺少收尾的 message.assistant，也不再显示流式转圈。
  */
@@ -110,23 +107,6 @@ export function buildConversation(
         }
         break;
       }
-      case "approval.requested":
-      case "approval.resolved": {
-        const approval = event.payload.approval;
-        const target = findExecutedCall(activeAssistant, approval.toolCallId);
-        if (target) {
-          target.approval = approval;
-        } else {
-          items.push({
-            id: event.id,
-            seq: event.seq,
-            createdAt: event.createdAt,
-            kind: "tool",
-            approval,
-          });
-        }
-        break;
-      }
       default:
         break;
     }
@@ -165,8 +145,7 @@ function hasTerminalStatus(events: TaskEvent[], status?: string): boolean {
 }
 
 /**
- * 把“助手请求 + 执行记录 + 审批结果”合并为可展示的 ToolCall，
- * 审批待处理时标记为待审批，拒绝或超时后标记为已拒绝并带回原因。
+ * 把“助手请求 + 执行记录”合并为可展示的 ToolCall。
  */
 export function toDisplayToolCall(call: ConversationToolCall): ToolCall {
   const pending: ToolCall = {
@@ -183,18 +162,7 @@ export function toDisplayToolCall(call: ConversationToolCall): ToolCall {
     durationMs: null,
   };
   const base = call.execution ?? pending;
-  let state = base.state;
-  let error = base.error;
-  if (call.approval?.status === "pending" && state === "running") {
-    state = "requires_approval";
-  } else if (
-    (call.approval?.status === "rejected" || call.approval?.status === "expired") &&
-    state === "running"
-  ) {
-    state = "rejected";
-    error = error || call.approval.reason;
-  }
-  return { ...base, state, error };
+  return { ...base };
 }
 
 function findRequestedCall(

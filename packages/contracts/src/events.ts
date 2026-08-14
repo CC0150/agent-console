@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { Task, TaskStatus } from "./task";
-import { ApprovalRequest } from "./approval";
 import { AssistantToolCall, PlanStep, ToolCall } from "./tools";
 import { Usage } from "./llm";
 import { TaskArtifact } from "./artifacts";
@@ -11,8 +10,6 @@ export const TASK_EVENT_TYPES = [
   "task.status_changed",
   "tool.started",
   "tool.finished",
-  "approval.requested",
-  "approval.resolved",
   "message.delta",
   "message.assistant",
   "artifact.created",
@@ -65,20 +62,6 @@ export const ToolFinishedEvent = EventBase.extend({
   }),
 });
 
-export const ApprovalRequestedEvent = EventBase.extend({
-  type: z.literal("approval.requested"),
-  payload: z.object({
-    approval: ApprovalRequest,
-  }),
-});
-
-export const ApprovalResolvedEvent = EventBase.extend({
-  type: z.literal("approval.resolved"),
-  payload: z.object({
-    approval: ApprovalRequest,
-  }),
-});
-
 export const MessageDeltaEvent = EventBase.extend({
   type: z.literal("message.delta"),
   payload: z.object({
@@ -124,8 +107,6 @@ export const TaskEvent = z.discriminatedUnion("type", [
   StatusChangedEvent,
   ToolStartedEvent,
   ToolFinishedEvent,
-  ApprovalRequestedEvent,
-  ApprovalResolvedEvent,
   MessageDeltaEvent,
   MessageAssistantEvent,
   ArtifactCreatedEvent,

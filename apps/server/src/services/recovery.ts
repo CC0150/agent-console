@@ -1,6 +1,5 @@
 import type { Task, TaskEvent, TaskStatus } from "@agent-console/contracts";
 import {
-  approvalRepository,
   eventRepository,
   taskRepository,
   withTransaction,
@@ -17,7 +16,7 @@ type ToolFinishedEvent = Extract<TaskEvent, { type: "tool.finished" }>;
 /**
  * 服务启动时恢复未完成任务：
  * - planning/running 标记为 failed，并补全中断的工具事件；
- * - paused 保持暂停，等待用户手动续跑，中断的工具/审批同样补全。
+ * - paused 保持暂停，等待用户手动续跑，中断的工具同样补全。
  * 所有写库操作在单个事务内完成，重复启动不会重复写入恢复事件。
  */
 export function recoverInterruptedTasks(): number {
@@ -37,23 +36,9 @@ export function recoverInterruptedTasks(): number {
 function recoverTask(task: Task): boolean {
   const events = eventRepository.listByTask(task.id);
   const interruptedToolEvents = findInterruptedTools(events);
-  const pendingApprovals = approvalRepository.listPendingByTask(task.id);
-  const interruptedToolById = new Map(
-    interruptedToolEvents.map((event) => [event.payload.toolCall.id, event]),
-  );
-  const approvalToolIds = new Set(
-    pendingApprovals.map((approval) => approval.toolCallId),
-  );
-  const interruptedToolsWithoutApproval = interruptedToolEvents.filter(
-    (event) => !approvalToolIds.has(event.payload.toolCall.id),
-  );
   const failed = task.status !== "paused";
 
-  if (
-    interruptedToolsWithoutApproval.length === 0 &&
-    pendingApprovals.length === 0 &&
-    !failed
-  ) {
+  if (interruptedToolEvents.length === 0 && !failed) {
     return false;
   }
 
@@ -64,7 +49,6 @@ function recoverTask(task: Task): boolean {
 
     const finishInterruptedTool = (
       startedEvent: ToolStartedEvent,
-      state: "failed" | "rejected",
       error: string,
     ) => {
       finishedToolCount += 1;
@@ -72,7 +56,7 @@ function recoverTask(task: Task): boolean {
         createEvent(task.id, "tool.finished", {
           toolCall: {
             ...startedEvent.payload.toolCall,
-            state,
+            state: "failed",
             error,
             output: null,
             finishedAt: now,
@@ -82,25 +66,8 @@ function recoverTask(task: Task): boolean {
       );
     };
 
-    for (const startedEvent of interruptedToolsWithoutApproval) {
-      finishInterruptedTool(startedEvent, "failed", RECOVERY_TOOL_ERROR);
-    }
-
-    for (const approval of pendingApprovals) {
-      const resolved = approvalRepository.resolve(approval.id, "expired");
-      if (resolved) {
-        nextEvents.push(
-          createEvent(task.id, "approval.resolved", { approval: resolved }),
-        );
-      }
-      const startedEvent = interruptedToolById.get(approval.toolCallId);
-      if (startedEvent) {
-        finishInterruptedTool(
-          startedEvent,
-          "rejected",
-          "服务重启，审批已过期",
-        );
-      }
+    for (const startedEvent of interruptedToolEvents) {
+      finishInterruptedTool(startedEvent, RECOVERY_TOOL_ERROR);
     }
 
     if (finishedToolCount > 0) {

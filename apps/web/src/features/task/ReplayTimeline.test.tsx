@@ -24,8 +24,8 @@ const events = [
     toolCall: {
       id: "call-1",
       taskId: "task-1",
-      toolName: "search_jobs",
-      input: { city: "杭州" },
+      toolName: "write_report",
+      input: { title: "岗位调研报告" },
       state: "running",
       output: null,
       error: null,
@@ -65,7 +65,7 @@ describe("ReplayTimeline", () => {
         cursor={0}
         onSeek={() => undefined}
         filter="all"
-        query="杭州"
+        query="岗位"
         onFilterChange={() => undefined}
         onQueryChange={() => undefined}
       />,
