@@ -87,7 +87,7 @@ function recoverTask(task: Task): boolean {
     }
 
     for (const approval of pendingApprovals) {
-      const resolved = approvalRepository.resolve(approval.id, "cancelled");
+      const resolved = approvalRepository.resolve(approval.id, "expired");
       if (resolved) {
         nextEvents.push(
           createEvent(task.id, "approval.resolved", { approval: resolved }),
@@ -98,7 +98,7 @@ function recoverTask(task: Task): boolean {
         finishInterruptedTool(
           startedEvent,
           "rejected",
-          "服务重启，审批已取消",
+          "服务重启，审批已过期",
         );
       }
     }

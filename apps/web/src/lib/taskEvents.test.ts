@@ -130,4 +130,51 @@ describe("taskEvents", () => {
 
     expect(extractToolCalls([started, requested, resolved])[0].state).toBe("rejected");
   });
+
+  it("审批超时后工具调用进入已拒绝状态", () => {
+    const started = event(1, "tool.started", {
+      toolCall: {
+        id: "call-3",
+        taskId: "task-1",
+        toolName: "search_jobs",
+        input: { city: "杭州" },
+        state: "running",
+        output: null,
+        error: null,
+        startedAt: "2026-08-12T00:00:00.000Z",
+        finishedAt: null,
+        durationMs: null,
+      },
+    });
+    const requested = event(2, "approval.requested", {
+      approval: {
+        id: "approval-3",
+        taskId: "task-1",
+        toolCallId: "call-3",
+        toolName: "search_jobs",
+        input: { city: "杭州" },
+        reason: "需要人工确认",
+        status: "pending",
+        requestedAt: "2026-08-12T00:00:00.000Z",
+        resolvedAt: null,
+      },
+    });
+    const resolved = event(3, "approval.resolved", {
+      approval: {
+        id: "approval-3",
+        taskId: "task-1",
+        toolCallId: "call-3",
+        toolName: "search_jobs",
+        input: { city: "杭州" },
+        reason: "需要人工确认",
+        status: "expired",
+        requestedAt: "2026-08-12T00:00:00.000Z",
+        resolvedAt: "2026-08-12T00:00:01.000Z",
+      },
+    });
+
+    expect(extractToolCalls([started, requested, resolved])[0].state).toBe(
+      "rejected",
+    );
+  });
 });

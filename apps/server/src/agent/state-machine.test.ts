@@ -13,8 +13,16 @@ describe("任务状态机", () => {
     expect(canTransition("paused", "running")).toBe(true);
   });
 
-  it("拒绝终态回到运行态", () => {
+  it("允许失败任务恢复运行", () => {
+    expect(canTransition("failed", "running")).toBe(true);
+    expect(() => assertTransition("failed", "running")).not.toThrow();
+  });
+
+  it("拒绝完成或取消状态回到运行态", () => {
     expect(canTransition("completed", "running")).toBe(false);
-    expect(() => assertTransition("failed", "running")).toThrow(StateTransitionError);
+    expect(canTransition("cancelled", "running")).toBe(false);
+    expect(() => assertTransition("completed", "running")).toThrow(
+      StateTransitionError,
+    );
   });
 });

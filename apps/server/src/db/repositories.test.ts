@@ -5,6 +5,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 let tempDir: string;
 let repository: Awaited<typeof import("./repositories")>["taskRepository"];
+let approvalRepository: Awaited<typeof import("./repositories")>["approvalRepository"];
 
 beforeAll(async () => {
   tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "agent-console-repositories-"));
@@ -13,7 +14,9 @@ beforeAll(async () => {
   const { migrate } = await import("./schema");
   migrate();
 
-  repository = (await import("./repositories")).taskRepository;
+  const repositories = await import("./repositories");
+  repository = repositories.taskRepository;
+  approvalRepository = repositories.approvalRepository;
 });
 
 beforeEach(() => {
@@ -105,5 +108,26 @@ describe("taskRepository.query", () => {
     const clamped = repository.query({ page: 99, pageSize: 5 });
     expect(clamped.page).toBe(3);
     expect(clamped.tasks).toHaveLength(2);
+  });
+});
+
+describe("approvalRepository", () => {
+  it("创建审批时写入过期时间并持久化", () => {
+    const task = repository.create({ goal: "审批超时测试", model: "mock" });
+    const approval = approvalRepository.create({
+      taskId: task.id,
+      toolCallId: "call-1",
+      toolName: "http_request",
+      input: { url: "https://example.com" },
+      reason: "需要人工确认",
+    });
+
+    expect(approval.expiresAt).toBeDefined();
+    expect(
+      new Date(approval.expiresAt as string).getTime(),
+    ).toBeGreaterThan(new Date(approval.requestedAt).getTime());
+
+    const loaded = approvalRepository.findById(approval.id);
+    expect(loaded?.expiresAt).toBe(approval.expiresAt);
   });
 });

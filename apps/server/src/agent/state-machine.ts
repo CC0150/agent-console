@@ -5,8 +5,8 @@ const TRANSITIONS: Record<TaskStatus, TaskStatus[]> = {
   planning: ["running", "paused", "failed", "cancelled"],
   running: ["paused", "completed", "failed", "cancelled"],
   paused: ["running", "cancelled", "failed"],
+  failed: ["running"],
   completed: [],
-  failed: [],
   cancelled: [],
 };
 

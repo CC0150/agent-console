@@ -185,6 +185,24 @@ describe("buildConversation", () => {
     expect(display.state).toBe("rejected");
     expect(display.error).toBe("该操作不允许");
   });
+
+  it("审批超时后工具调用状态为已拒绝并带回原因", () => {
+    const display = toDisplayToolCall({
+      request: assistantToolCall("assistant-1"),
+      execution: toolCall("exec-1", {
+        assistantCallId: "assistant-1",
+        state: "running",
+        output: null,
+        startedAt: CREATED_AT,
+        finishedAt: null,
+        durationMs: null,
+      }),
+      approval: approval("approval-1", "exec-1", "expired", "审批超时，已自动拒绝"),
+    });
+
+    expect(display.state).toBe("rejected");
+    expect(display.error).toBe("审批超时，已自动拒绝");
+  });
 });
 
 describe("ConversationView", () => {

@@ -8,6 +8,7 @@ import { workspacesRouter } from "./api/workspaces";
 import { config } from "./config";
 import { isDatabaseOpen } from "./db/client";
 import { AppError } from "./errors";
+import { logger } from "./logger";
 
 export function createApp(): express.Express {
   const app = express();
@@ -71,7 +72,12 @@ export function createApp(): express.Express {
       });
       return;
     }
-    console.error(`[agent-console] unhandled error (request ${requestId})`, error);
+    logger.error("未处理的请求错误", {
+      requestId,
+      method: _req.method,
+      path: _req.path,
+      error: error instanceof Error ? error.message : String(error),
+    });
     res.status(500).json({
       error: { code: "internal_error", message: "服务器内部错误" },
       requestId,

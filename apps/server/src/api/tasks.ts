@@ -203,7 +203,12 @@ tasksRouter.post("/:id/actions", (req, res) => {
     return;
   }
 
-  if (action === "pause") {
+  if (action === "retry") {
+    if (task.status !== "failed") {
+      throw new AppError(409, "task_cannot_retry", "只有失败的任务可以续跑");
+    }
+    retryTask(task);
+  } else if (action === "pause") {
     if (!ACTIVE_STATUSES.includes(task.status) || task.status === "paused") {
       throw new AppError(409, "task_cannot_pause", "当前任务状态不能暂停");
     }
@@ -328,6 +333,15 @@ function pauseTask(task: Task): boolean {
 
 function resumeTask(task: Task): boolean {
   if (task.status !== "paused") {
+    return false;
+  }
+  const runner = TaskRunner.get(task.id) ?? TaskRunner.resume(task);
+  runner.resume();
+  return true;
+}
+
+function retryTask(task: Task): boolean {
+  if (task.status !== "failed") {
     return false;
   }
   const runner = TaskRunner.get(task.id) ?? TaskRunner.resume(task);

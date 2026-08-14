@@ -166,7 +166,7 @@ function hasTerminalStatus(events: TaskEvent[], status?: string): boolean {
 
 /**
  * 把“助手请求 + 执行记录 + 审批结果”合并为可展示的 ToolCall，
- * 审批待处理时标记为待审批，拒绝时标记为已拒绝并带回原因。
+ * 审批待处理时标记为待审批，拒绝或超时后标记为已拒绝并带回原因。
  */
 export function toDisplayToolCall(call: ConversationToolCall): ToolCall {
   const pending: ToolCall = {
@@ -187,7 +187,10 @@ export function toDisplayToolCall(call: ConversationToolCall): ToolCall {
   let error = base.error;
   if (call.approval?.status === "pending" && state === "running") {
     state = "requires_approval";
-  } else if (call.approval?.status === "rejected" && state === "running") {
+  } else if (
+    (call.approval?.status === "rejected" || call.approval?.status === "expired") &&
+    state === "running"
+  ) {
     state = "rejected";
     error = error || call.approval.reason;
   }

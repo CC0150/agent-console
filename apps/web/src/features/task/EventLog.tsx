@@ -55,6 +55,7 @@ const APPROVAL_LABELS: Record<string, string> = {
   approved: "已批准",
   rejected: "已拒绝",
   cancelled: "已取消",
+  expired: "已超时",
 };
 
 export function EventLog({ events }: { events: TaskEvent[] }) {

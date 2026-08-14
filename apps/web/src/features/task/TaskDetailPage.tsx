@@ -211,6 +211,13 @@ export function TaskDetailPage() {
         />
       ) : null}
 
+      {task.status === "failed" && task.error ? (
+        <ErrorBanner
+          message={`任务执行失败：${task.error}`}
+          onRetry={() => actionMutation.mutate("retry")}
+        />
+      ) : null}
+
       <TaskActions
         task={task}
         isPending={actionMutation.isPending}

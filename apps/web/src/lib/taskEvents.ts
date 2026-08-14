@@ -24,7 +24,7 @@ export function extractToolCalls(events: TaskEvent[]): ToolCall[] {
   const calls = new Map<string, ToolCall>();
   const approvalStates = new Map<
     string,
-    "requires_approval" | "approved" | "rejected" | "cancelled"
+    "requires_approval" | "approved" | "rejected" | "cancelled" | "expired"
   >();
   for (const event of events) {
     if (event.type === "tool.started") {

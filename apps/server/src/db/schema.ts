@@ -1,4 +1,5 @@
 import { db } from "./client";
+import { config } from "../config";
 
 const schema = `
 CREATE TABLE IF NOT EXISTS tasks (
@@ -43,6 +44,7 @@ CREATE TABLE IF NOT EXISTS approvals (
   reason TEXT NOT NULL,
   status TEXT NOT NULL,
   requested_at TEXT NOT NULL,
+  expires_at TEXT,
   resolved_at TEXT,
   FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
 );
@@ -127,6 +129,7 @@ export function migrate(): void {
   db.exec(schema);
 
   ensureTaskWorkspaceColumn();
+  ensureApprovalExpiresColumn();
   dedupeTaskEventSeqs();
   db.exec(indexes);
 
@@ -167,6 +170,29 @@ function ensureTaskWorkspaceColumn(): void {
     return;
   }
   db.exec("ALTER TABLE tasks ADD COLUMN workspace_id TEXT NOT NULL DEFAULT 'default'");
+}
+
+function ensureApprovalExpiresColumn(): void {
+  const columns = db.prepare("PRAGMA table_info(approvals)").all() as Array<{
+    name: string;
+  }>;
+  if (!columns.some((column) => column.name === "expires_at")) {
+    db.exec("ALTER TABLE approvals ADD COLUMN expires_at TEXT");
+  }
+
+  const pending = db
+    .prepare(
+      `SELECT id, requested_at FROM approvals
+       WHERE status = 'pending' AND expires_at IS NULL`,
+    )
+    .all() as Array<{ id: string; requested_at: string }>;
+  const update = db.prepare("UPDATE approvals SET expires_at = ? WHERE id = ?");
+  for (const row of pending) {
+    const expiresAt = new Date(
+      new Date(row.requested_at).getTime() + config.approvalTimeoutMs,
+    ).toISOString();
+    update.run(expiresAt, row.id);
+  }
 }
 
 function dedupeTaskEventSeqs(): void {

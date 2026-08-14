@@ -5,6 +5,7 @@ export const ApprovalStatus = z.enum([
   "approved",
   "rejected",
   "cancelled",
+  "expired",
 ]);
 
 export type ApprovalStatus = z.infer<typeof ApprovalStatus>;
@@ -23,6 +24,7 @@ export const ApprovalRequest = z.object({
   status: ApprovalStatus,
   requestedAt: z.string(),
   resolvedAt: z.string().nullable(),
+  expiresAt: z.string().optional(),
 });
 
 export type ApprovalRequest = z.infer<typeof ApprovalRequest>;

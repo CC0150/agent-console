@@ -3,18 +3,22 @@ import { TaskRunner } from "./agent/runner";
 import { config } from "./config";
 import { closeDatabase } from "./db/client";
 import { migrate } from "./db/schema";
+import { logger } from "./logger";
 import { recoverInterruptedTasks } from "./services/recovery";
 import "./tools";
 
 migrate();
 const recovered = recoverInterruptedTasks();
 if (recovered > 0) {
-  console.log(`[agent-console] recovered ${recovered} interrupted task(s)`);
+  logger.info("已恢复中断任务", { recovered });
 }
 
 const app = createApp();
 const server = app.listen(config.port, () => {
-  console.log(`[agent-console] server listening on http://localhost:${config.port}`);
+  logger.info("服务已启动", {
+    url: `http://localhost:${config.port}`,
+    provider: config.llm.provider,
+  });
 });
 
 let shuttingDown = false;
@@ -24,7 +28,7 @@ async function shutdown(): Promise<void> {
     return;
   }
   shuttingDown = true;
-  console.log("[agent-console] shutting down");
+  logger.info("服务正在关闭");
 
   const closed = new Promise<void>((resolve) => {
     server.close(() => resolve());

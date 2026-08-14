@@ -1,4 +1,5 @@
 import type { TaskEvent } from "@agent-console/contracts";
+import { logger } from "../logger";
 
 type Subscriber = (event: TaskEvent) => void;
 
@@ -26,7 +27,11 @@ class EventBus {
       try {
         subscriber(event);
       } catch (error) {
-        console.error("事件订阅者执行失败", error);
+        logger.error("事件订阅者执行失败", {
+          taskId: event.taskId,
+          eventType: event.type,
+          error: error instanceof Error ? error.message : String(error),
+        });
       }
     }
   }

@@ -105,7 +105,7 @@ describe("服务重启恢复", () => {
     expect(recoverInterruptedTasks()).toBe(0);
   });
 
-  it("恢复时取消待处理审批并补发对应工具结束事件", () => {
+  it("恢复时过期待处理审批并补发对应工具结束事件", () => {
     const task = taskRepository.create({ goal: "审批中断任务", model: "mock" });
     taskRepository.update(task.id, { status: "running" });
     createEvent(task.id, "tool.started", {
@@ -135,7 +135,7 @@ describe("服务重启恢复", () => {
     const recovered = taskRepository.findById(task.id);
     expect(recovered?.status).toBe("failed");
     expect(recovered?.currentStep).toBe(1);
-    expect(approvalRepository.findById(approval.id)?.status).toBe("cancelled");
+    expect(approvalRepository.findById(approval.id)?.status).toBe("expired");
 
     const events = eventRepository.listByTask(task.id);
     expect(
@@ -143,7 +143,7 @@ describe("服务重启恢复", () => {
         (event) =>
           event.type === "approval.resolved" &&
           event.payload.approval.id === approval.id &&
-          event.payload.approval.status === "cancelled",
+          event.payload.approval.status === "expired",
       ),
     ).toBe(true);
 
@@ -153,7 +153,7 @@ describe("服务重启恢复", () => {
     expect(finished).toHaveLength(1);
     expect(finished[0].payload.toolCall).toMatchObject({
       state: "rejected",
-      error: "服务重启，审批已取消",
+      error: "服务重启，审批已过期",
     });
   });
 });

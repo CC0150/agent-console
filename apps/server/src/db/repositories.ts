@@ -59,6 +59,7 @@ interface ApprovalRow {
   reason: string;
   status: string;
   requested_at: string;
+  expires_at: string | null;
   resolved_at: string | null;
 }
 
@@ -364,17 +365,19 @@ export const workspaceRepository = {
 export const approvalRepository = {
   create(input: Omit<ApprovalRequestType, "id" | "status" | "requestedAt" | "resolvedAt">): ApprovalRequestType {
     const now = new Date().toISOString();
+    const expiresAt = new Date(Date.now() + config.approvalTimeoutMs).toISOString();
     const approval: ApprovalRequestType = {
       ...input,
       id: randomUUID(),
       status: "pending",
       requestedAt: now,
       resolvedAt: null,
+      expiresAt,
     };
     db.prepare(
       `INSERT INTO approvals
-        (id, task_id, tool_call_id, tool_name, input, reason, status, requested_at, resolved_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+        (id, task_id, tool_call_id, tool_name, input, reason, status, requested_at, expires_at, resolved_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
     ).run(
       approval.id,
       approval.taskId,
@@ -384,6 +387,7 @@ export const approvalRepository = {
       approval.reason,
       approval.status,
       approval.requestedAt,
+      approval.expiresAt,
     );
     return approval;
   },
@@ -547,6 +551,7 @@ function mapApproval(row: ApprovalRow): ApprovalRequestType {
     status: ApprovalStatus.parse(row.status),
     requestedAt: row.requested_at,
     resolvedAt: row.resolved_at,
+    expiresAt: row.expires_at ?? undefined,
   });
 }
 

@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ApprovalDecision } from "@agent-console/contracts";
 import { Check, Loader2, ShieldAlert, X } from "lucide-react";
+import { useEffect, useState } from "react";
 import { api } from "../../lib/api";
 import { ErrorBanner, toErrorMessage } from "../../components/ui/ErrorBanner";
 
@@ -44,11 +45,14 @@ export function ApprovalPanel({ taskId }: ApprovalPanelProps) {
         </span>
         <div>
           <h2 className="text-sm font-semibold text-ink-100">等待人工审批</h2>
-          <p className="eyebrow mt-0.5">工具调用需要确认后执行</p>
-        </div>
-        <span className="ml-auto rounded border border-amber-500/30 px-2 py-1 font-mono text-xs text-amber-300">
-          {approvals.length} 项待处理
-        </span>
+        <p className="eyebrow mt-0.5">工具调用需要确认后执行</p>
+      </div>
+      <span className="ml-auto font-mono text-xs text-amber-300/80">
+        审批超时后自动拒绝
+      </span>
+      <span className="rounded border border-amber-500/30 px-2 py-1 font-mono text-xs text-amber-300">
+        {approvals.length} 项待处理
+      </span>
       </div>
 
       {resolveMutation.error ? (
@@ -68,6 +72,9 @@ export function ApprovalPanel({ taskId }: ApprovalPanelProps) {
                 </p>
                 <p className="mt-1 text-sm leading-6 text-ink-400">
                   {approval.reason}
+                </p>
+                <p className="mt-1 font-mono text-xs text-amber-300/80">
+                  <ApprovalCountdown expiresAt={approval.expiresAt} />
                 </p>
               </div>
               <div className="flex shrink-0 items-center gap-2">
@@ -107,4 +114,27 @@ export function ApprovalPanel({ taskId }: ApprovalPanelProps) {
       </ul>
     </section>
   );
+}
+
+function ApprovalCountdown({ expiresAt }: { expiresAt?: string }) {
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1_000);
+    return () => clearInterval(timer);
+  }, []);
+
+  if (!expiresAt) {
+    return <span>审批超时后自动拒绝</span>;
+  }
+
+  const remainingMs = new Date(expiresAt).getTime() - now;
+  if (remainingMs <= 0) {
+    return <span className="text-rose-400">已超时，正在自动拒绝</span>;
+  }
+
+  const seconds = Math.ceil(remainingMs / 1_000);
+  const minutes = String(Math.floor(seconds / 60)).padStart(2, "0");
+  const rest = String(seconds % 60).padStart(2, "0");
+  return <span>剩余 {minutes}:{rest} 自动拒绝</span>;
 }

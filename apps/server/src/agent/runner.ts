@@ -22,6 +22,7 @@ import {
   type ChatMessage,
 } from "../llm/provider";
 import { trimMessages } from "../llm/context";
+import { logger } from "../logger";
 import { createEvent, emitEvent, publishEvent } from "../services/events";
 import { toolRegistry } from "../tools/registry";
 import { assertTransition } from "./state-machine";
@@ -42,7 +43,7 @@ export interface RunnerRecoveryState {
 }
 
 type ApprovalOutcome = {
-  decision: "approved" | "rejected" | "cancelled";
+  decision: "approved" | "rejected" | "cancelled" | "expired";
   reason: string;
 };
 
@@ -177,8 +178,8 @@ export class TaskRunner {
         await this.transition("planning");
       } else {
         const current = taskRepository.findById(this.taskId);
-        if (!current || current.status !== "paused") {
-          throw new Error(`任务不是可恢复的暂停状态: ${this.taskId}`);
+        if (!current || (current.status !== "paused" && current.status !== "failed")) {
+          throw new Error(`任务不是可恢复的暂停或失败状态: ${this.taskId}`);
         }
         await this.transition("running");
       }
@@ -255,6 +256,7 @@ export class TaskRunner {
         return;
       }
       const message = error instanceof Error ? error.message : String(error);
+      logger.error("任务执行失败", { taskId: this.taskId, error: message });
       await this.transition("failed", { error: message });
       await this.emit("task.failed", { error: message });
     }
@@ -321,14 +323,20 @@ export class TaskRunner {
           publishEvent(resolvedEvent);
         }
 
-        if (outcome.decision === "rejected" || outcome.decision === "cancelled") {
+        if (
+          outcome.decision === "rejected" ||
+          outcome.decision === "cancelled" ||
+          outcome.decision === "expired"
+        ) {
           const rejectedCall: ToolCall = {
             ...record,
             state: "rejected",
             error:
               outcome.decision === "rejected"
                 ? "用户拒绝了工具调用"
-                : outcome.reason,
+                : outcome.decision === "expired"
+                  ? "审批超时，已自动拒绝"
+                  : outcome.reason,
             finishedAt: new Date().toISOString(),
             durationMs: 0,
           };
@@ -358,6 +366,11 @@ export class TaskRunner {
       return output;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
+      logger.warn("工具调用失败", {
+        taskId: this.taskId,
+        toolName: toolCall.name,
+        error: message,
+      });
       const failedCall: ToolCall = {
         ...record,
         state: "failed",
@@ -397,7 +410,7 @@ export class TaskRunner {
         resolve(outcome);
       };
       const timer = setTimeout(() => {
-        settle({ decision: "cancelled", reason: "审批超时，已自动取消" });
+        settle({ decision: "expired", reason: "审批超时，已自动拒绝" });
       }, config.approvalTimeoutMs);
       timer.unref?.();
       this.approvalTimers.set(approval.id, timer);
@@ -415,8 +428,14 @@ export class TaskRunner {
 
     const now = new Date().toISOString();
     const patch: TaskPatch = { ...extra, status: to };
-    if (to === "running" && !current.startedAt) {
-      patch.startedAt = now;
+    if (to === "running") {
+      if (!current.startedAt) {
+        patch.startedAt = now;
+      }
+      if (current.status === "failed") {
+        patch.finishedAt = null;
+        patch.error = null;
+      }
     }
     if (TERMINAL_STATUSES.includes(to)) {
       patch.finishedAt = now;

@@ -36,7 +36,7 @@ export const CreateTaskInput = z.object({
 
 export type CreateTaskInput = z.infer<typeof CreateTaskInput>;
 
-export const TaskAction = z.enum(["pause", "resume", "cancel", "rerun"]);
+export const TaskAction = z.enum(["pause", "resume", "cancel", "retry", "rerun"]);
 
 export type TaskAction = z.infer<typeof TaskAction>;
 

@@ -14,6 +14,7 @@ import {
   Loader2,
   Pause,
   Play,
+  RefreshCw,
   RotateCcw,
   Search,
   Trash2,
@@ -125,6 +126,13 @@ export function TaskList({ tasks, total, isLoading, workspaces }: TaskListProps)
       navigate(`/tasks/${task.id}`);
     },
   });
+  const retryMutation = useMutation({
+    mutationFn: (task: Task) => api.action(task.id, "retry"),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["stats"] });
+    },
+  });
   const deleteMutation = useMutation({
     mutationFn: (taskIds: string[]) => api.batchAction("delete", taskIds),
     onSuccess: () => {
@@ -155,7 +163,7 @@ export function TaskList({ tasks, total, isLoading, workspaces }: TaskListProps)
   }
 
   const mutationError =
-    batchMutation.error ?? rerunMutation.error ?? deleteMutation.error;
+    batchMutation.error ?? retryMutation.error ?? rerunMutation.error ?? deleteMutation.error;
   const isBatchPending = batchMutation.isPending || deleteMutation.isPending;
   const batchButtonClass =
     "inline-flex h-8 items-center justify-center gap-1.5 rounded-md border px-2.5 text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-35";
@@ -331,7 +339,7 @@ export function TaskList({ tasks, total, isLoading, workspaces }: TaskListProps)
             <span className="eyebrow">目标</span>
             <span className="eyebrow">状态 / 进度</span>
             <span className="eyebrow">时间 / 耗时</span>
-            <span className="w-[76px] text-right">操作</span>
+            <span className="w-[108px] text-right">操作</span>
           </div>
 
           <ul className="divide-y divide-ink-700/25">
@@ -403,7 +411,24 @@ export function TaskList({ tasks, total, isLoading, workspaces }: TaskListProps)
                     </div>
                   </Link>
 
-                  <div className="flex w-[76px] shrink-0 items-center justify-end gap-1.5 border-l border-ink-700/20 px-2.5">
+                  <div className="flex w-[108px] shrink-0 items-center justify-end gap-1.5 border-l border-ink-700/20 px-2.5">
+                    {task.status === "failed" ? (
+                      <Tooltip content="从失败处续跑">
+                        <button
+                          type="button"
+                          aria-label={`续跑任务 ${task.goal}`}
+                          disabled={retryMutation.isPending}
+                          onClick={() => retryMutation.mutate(task)}
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-signal-500/25 bg-signal-500/10 text-signal-400 transition hover:border-signal-500/45 hover:bg-signal-500/20 hover:text-signal-300 disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          {retryMutation.isPending ? (
+                            <span className="h-4 w-4 animate-spin rounded-full border-2 border-signal-500/30 border-t-signal-400" />
+                          ) : (
+                            <RefreshCw className="h-4 w-4" />
+                          )}
+                        </button>
+                      </Tooltip>
+                    ) : null}
                     {TERMINAL_STATUSES.includes(task.status) ? (
                       <Tooltip content="重跑该任务">
                         <button

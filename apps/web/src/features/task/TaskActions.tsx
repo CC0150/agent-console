@@ -1,5 +1,5 @@
 import type { Task, TaskAction } from "@agent-console/contracts";
-import { Loader2, Pause, Play, RotateCcw, XCircle } from "lucide-react";
+import { Loader2, Pause, Play, RefreshCw, RotateCcw, XCircle } from "lucide-react";
 
 interface TaskActionsProps {
   task: Task;
@@ -11,6 +11,7 @@ export function TaskActions({ task, onAction, isPending }: TaskActionsProps) {
   const canPause = task.status === "running" || task.status === "planning";
   const canResume = task.status === "paused";
   const canCancel = ["queued", "planning", "running", "paused"].includes(task.status);
+  const canRetry = task.status === "failed";
   const canRerun = ["completed", "failed", "cancelled"].includes(task.status);
 
   const baseClass =
@@ -47,6 +48,15 @@ export function TaskActions({ task, onAction, isPending }: TaskActionsProps) {
       >
         {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />}
         取消
+      </button>
+      <button
+        type="button"
+        className={`${baseClass} border-signal-500/30 bg-signal-500/10 text-signal-300 hover:bg-signal-500/20`}
+        disabled={!canRetry || isPending}
+        onClick={() => onAction("retry")}
+      >
+        {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+        续跑
       </button>
       <button
         type="button"
