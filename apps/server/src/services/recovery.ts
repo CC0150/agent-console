@@ -19,22 +19,21 @@ type ToolFinishedEvent = Extract<TaskEvent, { type: "tool.finished" }>;
  * - paused 保持暂停，等待用户手动续跑，中断的工具同样补全。
  * 所有写库操作在单个事务内完成，重复启动不会重复写入恢复事件。
  */
-export function recoverInterruptedTasks(): number {
-  const interrupted = taskRepository
-    .list()
+export async function recoverInterruptedTasks(): Promise<number> {
+  const interrupted = (await taskRepository.list())
     .filter((task) => INTERRUPTED_STATUSES.includes(task.status));
   let recovered = 0;
 
   for (const task of interrupted) {
-    if (recoverTask(task)) {
+    if (await recoverTask(task)) {
       recovered += 1;
     }
   }
   return recovered;
 }
 
-function recoverTask(task: Task): boolean {
-  const events = eventRepository.listByTask(task.id);
+async function recoverTask(task: Task): Promise<boolean> {
+  const events = await eventRepository.listByTask(task.id);
   const interruptedToolEvents = findInterruptedTools(events);
   const failed = task.status !== "paused";
 
@@ -44,16 +43,16 @@ function recoverTask(task: Task): boolean {
 
   const now = new Date().toISOString();
   let finishedToolCount = 0;
-  const created: TaskEvent[] = withTransaction(() => {
+  const created: TaskEvent[] = await withTransaction(async () => {
     const nextEvents: TaskEvent[] = [];
 
-    const finishInterruptedTool = (
+    const finishInterruptedTool = async (
       startedEvent: ToolStartedEvent,
       error: string,
     ) => {
       finishedToolCount += 1;
       nextEvents.push(
-        createEvent(task.id, "tool.finished", {
+        await createEvent(task.id, "tool.finished", {
           toolCall: {
             ...startedEvent.payload.toolCall,
             state: "failed",
@@ -67,27 +66,27 @@ function recoverTask(task: Task): boolean {
     };
 
     for (const startedEvent of interruptedToolEvents) {
-      finishInterruptedTool(startedEvent, RECOVERY_TOOL_ERROR);
+      await finishInterruptedTool(startedEvent, RECOVERY_TOOL_ERROR);
     }
 
     if (finishedToolCount > 0) {
-      taskRepository.update(task.id, {
+      await taskRepository.update(task.id, {
         currentStep: task.currentStep + finishedToolCount,
       });
     }
 
     if (failed) {
-      taskRepository.update(task.id, {
+      await taskRepository.update(task.id, {
         status: "failed",
         error: RECOVERY_ERROR,
         finishedAt: now,
       });
       nextEvents.push(
-        createEvent(task.id, "task.status_changed", {
+        await createEvent(task.id, "task.status_changed", {
           from: task.status,
           to: "failed",
         }),
-        createEvent(task.id, "task.failed", { error: RECOVERY_ERROR }),
+        await createEvent(task.id, "task.failed", { error: RECOVERY_ERROR }),
       );
     }
 

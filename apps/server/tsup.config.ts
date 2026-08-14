@@ -7,6 +7,5 @@ export default defineConfig({
   target: "node20",
   sourcemap: true,
   clean: true,
-  external: ["better-sqlite3"],
   noExternal: ["@agent-console/contracts"],
 });

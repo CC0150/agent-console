@@ -1,21 +1,34 @@
-import fs from "node:fs";
-import path from "node:path";
-import Database from "better-sqlite3";
-import { config } from "../config";
+import { PrismaClient } from "@prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
 
-fs.mkdirSync(path.dirname(config.databasePath), { recursive: true });
+const connectionString = process.env.DATABASE_URL;
+if (!connectionString) {
+  throw new Error("DATABASE_URL is not set");
+}
 
-export const db = new Database(config.databasePath);
+const schema = process.env.DATABASE_SCHEMA;
+const adapter = new PrismaPg(
+  { connectionString },
+  schema ? { schema } : undefined,
+);
 
-db.pragma("journal_mode = WAL");
-db.pragma("foreign_keys = ON");
+export const prisma = new PrismaClient({ adapter });
 
-export function closeDatabase(): void {
-  if (db.open) {
-    db.close();
+let databaseReady = false;
+
+export async function connectDatabase(): Promise<void> {
+  if (databaseReady) {
+    return;
   }
+  await prisma.$connect();
+  databaseReady = true;
+}
+
+export async function closeDatabase(): Promise<void> {
+  await prisma.$disconnect();
+  databaseReady = false;
 }
 
 export function isDatabaseOpen(): boolean {
-  return db.open;
+  return databaseReady;
 }

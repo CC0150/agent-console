@@ -6,7 +6,7 @@ Agent 任务执行与回放控制台。输入一个目标，Agent 生成执行�
 
 - Web：React 19 + TypeScript + Vite + Tailwind CSS
 - 服务端：Node.js + Express + TypeScript
-- 数据：SQLite + better-sqlite3
+- 数据：PostgreSQL（Neon）+ Prisma ORM
 - 状态：TanStack Query（服务端状态）+ Zustand（流式瞬时状态）
 - 实时：SSE + `Last-Event-ID` 断线重连
 - Agent：自研 Agent Loop + ToolRegistry，默认 Mock LLM，可切换 OpenAI 兼容接口
@@ -28,6 +28,7 @@ npm.cmd run dev
 默认使用 Mock LLM，不需要任何 Key 即可跑通完整链路。复制 `apps/server/.env.example` 为 `apps/server/.env` 后填入真实配置，可切换到 OpenAI 兼容接口：
 
 ```env
+DATABASE_URL=postgresql://USER:PASSWORD@HOST:5432/DB_NAME?sslmode=require
 LLM_PROVIDER=openai
 LLM_BASE_URL=https://api.openai.com/v1
 LLM_API_KEY=your-key
@@ -35,6 +36,8 @@ LLM_MODEL=gpt-4.1-mini
 LLM_MAX_CONTEXT_TOKENS=16000
 LLM_MAX_HISTORY_MESSAGES=80
 ```
+
+`DATABASE_URL` 是 Prisma 运行时连接的 PostgreSQL（Neon）连接串，不要提交到版本库。
 
 真实模型支持流式输出、多轮 tool calling 和 token usage 记录；上下文接近上限时，服务端会保留 system 与最后一个 user 消息，并按最近轮次裁剪历史。
 

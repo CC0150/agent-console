@@ -28,7 +28,6 @@ const provider = process.env.LLM_PROVIDER ?? "mock";
 
 export const config = {
   port: Number(process.env.PORT ?? 3001),
-  databasePath: path.resolve(process.cwd(), process.env.DATABASE_PATH ?? "data/agent-console.db"),
   corsOrigin: process.env.CORS_ORIGIN ?? "http://localhost:5173",
   httpTool: {
     allowedHosts: parseAllowedHosts(process.env.HTTP_TOOL_ALLOWED_HOSTS),

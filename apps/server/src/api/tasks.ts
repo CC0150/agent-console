@@ -24,7 +24,7 @@ export const tasksRouter = Router();
 const ACTIVE_STATUSES: Task["status"][] = ["queued", "planning", "running", "paused"];
 const TERMINAL_STATUSES: Task["status"][] = ["completed", "failed", "cancelled"];
 
-tasksRouter.get("/", (req, res) => {
+tasksRouter.get("/", async (req, res) => {
   const parsed = TaskListQuery.safeParse({
     workspaceId: queryString(req.query.workspaceId),
     q: queryString(req.query.q),
@@ -39,28 +39,31 @@ tasksRouter.get("/", (req, res) => {
       issues: parsed.error.flatten(),
     });
   }
-  res.json(taskRepository.query(parsed.data));
+  res.json(await taskRepository.query(parsed.data));
 });
 
-tasksRouter.post("/", (req, res) => {
+tasksRouter.post("/", async (req, res) => {
   const parsed = CreateTaskInput.safeParse(req.body);
   if (!parsed.success) {
     throw new AppError(400, "invalid_goal", "目标不能为空", {
       issues: parsed.error.flatten(),
     });
   }
-  if (parsed.data.workspaceId && !workspaceRepository.findById(parsed.data.workspaceId)) {
+  if (
+    parsed.data.workspaceId &&
+    !(await workspaceRepository.findById(parsed.data.workspaceId))
+  ) {
     throw new AppError(400, "workspace_not_found", "工作区不存在");
   }
 
   const model = config.llm.provider === "openai" ? config.llm.model : "mock";
-  const created = withTransaction(() => {
-    const task = taskRepository.create({
+  const created = await withTransaction(async () => {
+    const task = await taskRepository.create({
       goal: parsed.data.goal,
       model,
       workspaceId: parsed.data.workspaceId,
     });
-    const event = createEvent(task.id, "task.created", { task });
+    const event = await createEvent(task.id, "task.created", { task });
     return { task, event };
   });
   publishEvent(created.event);
@@ -68,7 +71,7 @@ tasksRouter.post("/", (req, res) => {
   res.status(201).json({ task: created.task });
 });
 
-tasksRouter.post("/batch/actions", (req, res) => {
+tasksRouter.post("/batch/actions", async (req, res) => {
   const parsed = BatchTaskActionInput.safeParse(req.body);
   if (!parsed.success) {
     throw new AppError(400, "invalid_batch_action", "批量操作参数不合法", {
@@ -77,13 +80,14 @@ tasksRouter.post("/batch/actions", (req, res) => {
   }
 
   const { action, taskIds } = parsed.data;
-  const tasks = taskIds.map((id) => {
-    const task = taskRepository.findById(id);
+  const tasks: Task[] = [];
+  for (const id of taskIds) {
+    const task = await taskRepository.findById(id);
     if (!task) {
       throw new AppError(404, "task_not_found", `任务不存在：${id}`);
     }
-    return task;
-  });
+    tasks.push(task);
+  }
 
   let processed = 0;
   let skipped = 0;
@@ -91,7 +95,7 @@ tasksRouter.post("/batch/actions", (req, res) => {
 
   if (action === "delete") {
     for (const task of tasks) {
-      deleteTask(task);
+      await deleteTask(task);
       processed += 1;
     }
   } else if (action === "rerun") {
@@ -100,17 +104,17 @@ tasksRouter.post("/batch/actions", (req, res) => {
         skipped += 1;
         continue;
       }
-      rerunTasks.push(resetTaskForRerun(task));
+      rerunTasks.push(await resetTaskForRerun(task));
       processed += 1;
     }
   } else {
     for (const task of tasks) {
       const applied =
         action === "cancel"
-          ? cancelTask(task)
+          ? await cancelTask(task)
           : action === "pause"
-            ? pauseTask(task)
-            : resumeTask(task);
+            ? await pauseTask(task)
+            : await resumeTask(task);
       if (applied) {
         processed += 1;
       } else {
@@ -127,36 +131,36 @@ tasksRouter.post("/batch/actions", (req, res) => {
   });
 });
 
-tasksRouter.get("/:id", (req, res) => {
-  const task = taskRepository.findById(req.params.id);
+tasksRouter.get("/:id", async (req, res) => {
+  const task = await taskRepository.findById(req.params.id);
   if (!task) {
     throw new AppError(404, "task_not_found", "任务不存在");
   }
   res.json({ task });
 });
 
-tasksRouter.get("/:id/events", (req, res) => {
-  const task = taskRepository.findById(req.params.id);
+tasksRouter.get("/:id/events", async (req, res) => {
+  const task = await taskRepository.findById(req.params.id);
   if (!task) {
     throw new AppError(404, "task_not_found", "任务不存在");
   }
-  res.json({ events: eventRepository.listByTask(task.id) });
+  res.json({ events: await eventRepository.listByTask(task.id) });
 });
 
-tasksRouter.get("/:id/artifacts", (req, res) => {
-  const task = taskRepository.findById(req.params.id);
+tasksRouter.get("/:id/artifacts", async (req, res) => {
+  const task = await taskRepository.findById(req.params.id);
   if (!task) {
     throw new AppError(404, "task_not_found", "任务不存在");
   }
-  res.json({ artifacts: artifactRepository.listByTask(task.id) });
+  res.json({ artifacts: await artifactRepository.listByTask(task.id) });
 });
 
-tasksRouter.get("/:id/artifacts/:artifactId/content", (req, res) => {
-  const task = taskRepository.findById(req.params.id);
+tasksRouter.get("/:id/artifacts/:artifactId/content", async (req, res) => {
+  const task = await taskRepository.findById(req.params.id);
   if (!task) {
     throw new AppError(404, "task_not_found", "任务不存在");
   }
-  const result = artifactRepository.readContent(req.params.artifactId);
+  const result = await artifactRepository.readContent(req.params.artifactId);
   if (!result || result.artifact.taskId !== task.id) {
     throw new AppError(404, "artifact_not_found", "产出物不存在");
   }
@@ -172,17 +176,17 @@ tasksRouter.get("/:id/artifacts/:artifactId/content", (req, res) => {
   res.send(result.content);
 });
 
-tasksRouter.delete("/:id", (req, res) => {
-  const task = taskRepository.findById(req.params.id);
+tasksRouter.delete("/:id", async (req, res) => {
+  const task = await taskRepository.findById(req.params.id);
   if (!task) {
     throw new AppError(404, "task_not_found", "任务不存在");
   }
 
-  deleteTask(task);
+  await deleteTask(task);
   res.status(204).end();
 });
 
-tasksRouter.post("/:id/actions", (req, res) => {
+tasksRouter.post("/:id/actions", async (req, res) => {
   const parsed = TaskActionInput.safeParse(req.body);
   if (!parsed.success) {
     throw new AppError(400, "invalid_action", "任务操作不合法", {
@@ -190,7 +194,7 @@ tasksRouter.post("/:id/actions", (req, res) => {
     });
   }
 
-  const task = taskRepository.findById(req.params.id);
+  const task = await taskRepository.findById(req.params.id);
   if (!task) {
     throw new AppError(404, "task_not_found", "任务不存在");
   }
@@ -200,7 +204,7 @@ tasksRouter.post("/:id/actions", (req, res) => {
     if (!TERMINAL_STATUSES.includes(task.status)) {
       throw new AppError(409, "task_cannot_rerun", "只有已完成、失败或已取消的任务可以重跑");
     }
-    res.status(201).json({ task: resetTaskForRerun(task) });
+    res.status(201).json({ task: await resetTaskForRerun(task) });
     return;
   }
 
@@ -208,7 +212,7 @@ tasksRouter.post("/:id/actions", (req, res) => {
     if (task.status !== "failed") {
       throw new AppError(409, "task_cannot_retry", "只有失败的任务可以续跑");
     }
-    retryTask(task);
+    await retryTask(task);
   } else if (action === "pause") {
     if (!ACTIVE_STATUSES.includes(task.status) || task.status === "paused") {
       throw new AppError(409, "task_cannot_pause", "当前任务状态不能暂停");
@@ -216,47 +220,47 @@ tasksRouter.post("/:id/actions", (req, res) => {
     if (!TaskRunner.get(task.id)) {
       throw new AppError(409, "task_not_running", "任务当前没有运行中的执行器");
     }
-    pauseTask(task);
+    await pauseTask(task);
   } else if (action === "resume") {
     if (task.status !== "paused") {
       throw new AppError(409, "task_not_paused", "任务当前不是暂停状态");
     }
-    resumeTask(task);
+    await resumeTask(task);
   } else if (action === "cancel") {
     if (!ACTIVE_STATUSES.includes(task.status)) {
       throw new AppError(409, "task_cannot_cancel", "当前任务状态不能取消");
     }
-    cancelTask(task);
+    await cancelTask(task);
   }
 
-  res.json({ task: taskRepository.findById(task.id) });
+  res.json({ task: await taskRepository.findById(task.id) });
 });
 
 function queryString(value: unknown): string | undefined {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
 }
 
-function deleteTask(task: Task): void {
+async function deleteTask(task: Task): Promise<void> {
   const runner = TaskRunner.get(task.id);
   if (runner) {
     runner.cancel();
   }
-  artifactRepository.deleteByTask(task.id);
-  taskRepository.remove(task.id);
+  await artifactRepository.deleteByTask(task.id);
+  await taskRepository.remove(task.id);
 }
 
-function cancelTask(task: Task): boolean {
+async function cancelTask(task: Task): Promise<boolean> {
   if (!ACTIVE_STATUSES.includes(task.status)) {
     return false;
   }
   const runner = TaskRunner.get(task.id);
   if (!runner) {
-    const event = withTransaction(() => {
-      taskRepository.update(task.id, {
+    const event = await withTransaction(async () => {
+      await taskRepository.update(task.id, {
         status: "cancelled",
         finishedAt: new Date().toISOString(),
       });
-      return createEvent(task.id, "task.status_changed", {
+      return await createEvent(task.id, "task.status_changed", {
         from: task.status,
         to: "cancelled",
       });
@@ -268,7 +272,7 @@ function cancelTask(task: Task): boolean {
   return true;
 }
 
-function pauseTask(task: Task): boolean {
+async function pauseTask(task: Task): Promise<boolean> {
   if (task.status !== "running" && task.status !== "planning") {
     return false;
   }
@@ -280,29 +284,29 @@ function pauseTask(task: Task): boolean {
   return true;
 }
 
-function resumeTask(task: Task): boolean {
+async function resumeTask(task: Task): Promise<boolean> {
   if (task.status !== "paused") {
     return false;
   }
-  const runner = TaskRunner.get(task.id) ?? TaskRunner.resume(task);
+  const runner = TaskRunner.get(task.id) ?? (await TaskRunner.resume(task));
   runner.resume();
   return true;
 }
 
-function retryTask(task: Task): boolean {
+async function retryTask(task: Task): Promise<boolean> {
   if (task.status !== "failed") {
     return false;
   }
-  const runner = TaskRunner.get(task.id) ?? TaskRunner.resume(task);
+  const runner = TaskRunner.get(task.id) ?? (await TaskRunner.resume(task));
   runner.resume();
   return true;
 }
 
-function resetTaskForRerun(task: Task): Task {
-  const reset = withTransaction(() => {
-    artifactRepository.deleteByTask(task.id);
-    eventRepository.deleteByTask(task.id);
-    const updated = taskRepository.update(task.id, {
+async function resetTaskForRerun(task: Task): Promise<Task> {
+  const reset = await withTransaction(async () => {
+    await artifactRepository.deleteByTask(task.id);
+    await eventRepository.deleteByTask(task.id);
+    const updated = await taskRepository.update(task.id, {
       status: "queued",
       currentStep: 0,
       totalSteps: 0,
@@ -313,7 +317,7 @@ function resetTaskForRerun(task: Task): Task {
     if (!updated) {
       throw new Error(`任务不存在: ${task.id}`);
     }
-    const event = createEvent(task.id, "task.created", { task: updated });
+    const event = await createEvent(task.id, "task.created", { task: updated });
     return { task: updated, event };
   });
   publishEvent(reset.event);

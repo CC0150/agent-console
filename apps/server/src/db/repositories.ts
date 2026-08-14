@@ -1,6 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
+import { AsyncLocalStorage } from "node:async_hooks";
+import { Prisma, PrismaClient } from "@prisma/client";
 import {
   TaskStatus,
   TaskArtifact,
@@ -12,48 +14,48 @@ import {
   type Workspace,
 } from "@agent-console/contracts";
 import { config } from "../config";
-import { db } from "./client";
+import { prisma } from "./client";
 
 interface TaskRow {
   id: string;
   goal: string;
-  workspace_id: string;
+  workspaceId: string;
   status: string;
   model: string;
-  current_step: number;
-  total_steps: number;
+  currentStep: number;
+  totalSteps: number;
   error: string | null;
-  created_at: string;
-  updated_at: string;
-  started_at: string | null;
-  finished_at: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  startedAt: Date | null;
+  finishedAt: Date | null;
 }
 
 interface EventRow {
   id: string;
-  task_id: string;
+  taskId: string;
   seq: number;
   type: string;
-  payload: string;
-  created_at: string;
+  payload: Prisma.JsonValue;
+  createdAt: Date;
 }
 
 interface WorkspaceRow {
   id: string;
   name: string;
   description: string;
-  created_at: string;
-  updated_at: string;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 interface ArtifactRow {
   id: string;
-  task_id: string;
+  taskId: string;
   name: string;
-  storage_key: string;
-  mime_type: string;
-  size_bytes: number;
-  created_at: string;
+  storageKey: string;
+  mimeType: string;
+  sizeBytes: number;
+  createdAt: Date;
 }
 
 export type TaskPatch = Partial<
@@ -78,104 +80,158 @@ export interface TaskListResult {
   totalPages: number;
 }
 
-const TASK_SORT_COLUMNS: Record<TaskSortField, string> = {
-  createdAt: "created_at",
-  updatedAt: "updated_at",
+const TASK_SORT_FIELDS: Record<TaskSortField, keyof Prisma.TaskOrderByWithRelationInput> = {
+  createdAt: "createdAt",
+  updatedAt: "updatedAt",
   status: "status",
-  currentStep: "current_step",
+  currentStep: "currentStep",
 };
 
-export function withTransaction<T>(fn: () => T): T {
-  return db.transaction(fn)();
+const transactionContext = new AsyncLocalStorage<Prisma.TransactionClient>();
+
+export function withTransaction<T>(fn: () => Promise<T>): Promise<T> {
+  return prisma.$transaction((tx) => transactionContext.run(tx, () => fn()));
+}
+
+function client(): Prisma.TransactionClient | PrismaClient {
+  return transactionContext.getStore() ?? prisma;
 }
 
 function mapTask(row: TaskRow): Task {
   return {
     id: row.id,
     goal: row.goal,
-    workspaceId: row.workspace_id,
+    workspaceId: row.workspaceId,
     status: TaskStatus.parse(row.status),
     model: row.model,
-    currentStep: row.current_step,
-    totalSteps: row.total_steps,
+    currentStep: row.currentStep,
+    totalSteps: row.totalSteps,
     error: row.error,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-    startedAt: row.started_at,
-    finishedAt: row.finished_at,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+    startedAt: toIso(row.startedAt),
+    finishedAt: toIso(row.finishedAt),
   };
 }
 
+function mapWorkspace(row: WorkspaceRow): Workspace {
+  return {
+    id: row.id,
+    name: row.name,
+    description: row.description,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
+function mapArtifact(row: ArtifactRow): TaskArtifact {
+  return {
+    id: row.id,
+    taskId: row.taskId,
+    name: row.name,
+    mimeType: row.mimeType,
+    sizeBytes: row.sizeBytes,
+    createdAt: row.createdAt.toISOString(),
+  };
+}
+
+function mapEvent(row: EventRow): TaskEvent {
+  return {
+    id: row.id,
+    taskId: row.taskId,
+    seq: row.seq,
+    type: row.type,
+    createdAt: row.createdAt.toISOString(),
+    payload: row.payload as unknown as TaskEvent["payload"],
+  } as TaskEvent;
+}
+
+function toIso(value: Date | null): string | null {
+  return value ? value.toISOString() : null;
+}
+
+function isRecordNotFound(error: unknown): boolean {
+  return (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    error.code === "P2025"
+  );
+}
+
 export const taskRepository = {
-  create(input: { goal: string; model: string; workspaceId?: string }): Task {
+  async create(input: { goal: string; model: string; workspaceId?: string }): Promise<Task> {
     const now = new Date().toISOString();
     const id = randomUUID();
     const workspaceId = input.workspaceId ?? "default";
-    db.prepare(
-      `INSERT INTO tasks
-        (id, goal, workspace_id, status, model, current_step, total_steps, error, created_at, updated_at, started_at, finished_at)
-       VALUES (?, ?, ?, 'queued', ?, 0, 0, NULL, ?, ?, NULL, NULL)`,
-    ).run(id, input.goal, workspaceId, input.model, now, now);
-    const created = this.findById(id);
+    await client().task.create({
+      data: {
+        id,
+        goal: input.goal,
+        workspaceId,
+        status: "queued",
+        model: input.model,
+        currentStep: 0,
+        totalSteps: 0,
+        error: null,
+        createdAt: now,
+        updatedAt: now,
+        startedAt: null,
+        finishedAt: null,
+      },
+    });
+    const created = await this.findById(id);
     if (!created) {
       throw new Error("任务创建失败");
     }
     return created;
   },
 
-  findById(id: string): Task | null {
-    const row = db.prepare("SELECT * FROM tasks WHERE id = ?").get(id) as TaskRow | undefined;
+  async findById(id: string): Promise<Task | null> {
+    const row = await client().task.findUnique({ where: { id } });
     return row ? mapTask(row) : null;
   },
 
-  list(workspaceId?: string): Task[] {
-    const rows = workspaceId
-      ? (db
-          .prepare("SELECT * FROM tasks WHERE workspace_id = ? ORDER BY created_at DESC")
-          .all(workspaceId) as unknown as TaskRow[])
-      : (db
-          .prepare("SELECT * FROM tasks ORDER BY created_at DESC")
-          .all() as unknown as TaskRow[]);
+  async list(workspaceId?: string): Promise<Task[]> {
+    const rows = await client().task.findMany({
+      where: workspaceId ? { workspaceId } : undefined,
+      orderBy: { createdAt: "desc" },
+    });
     return rows.map(mapTask);
   },
 
-  query(input: TaskListQuery = { page: 1, pageSize: 20 }): TaskListResult {
-    const conditions: string[] = [];
-    const params: Array<string | number> = [];
+  async query(input: TaskListQuery = { page: 1, pageSize: 20 }): Promise<TaskListResult> {
+    const where: Prisma.TaskWhereInput = {};
     const workspaceId = input.workspaceId?.trim();
     const keyword = input.q?.trim();
 
     if (workspaceId) {
-      conditions.push("workspace_id = ?");
-      params.push(workspaceId);
+      where.workspaceId = workspaceId;
     }
     if (input.status) {
-      conditions.push("status = ?");
-      params.push(input.status);
+      where.status = input.status;
     }
     if (keyword) {
-      conditions.push("(goal LIKE ? OR id LIKE ?)");
-      params.push(`%${keyword}%`, `%${keyword}%`);
+      where.OR = [
+        { goal: { contains: keyword } },
+        { id: { contains: keyword } },
+      ];
     }
 
-    const whereSql = conditions.length > 0 ? ` WHERE ${conditions.join(" AND ")}` : "";
-    const countRow = db
-      .prepare(`SELECT COUNT(*) AS count FROM tasks${whereSql}`)
-      .get(...params) as { count: number };
-    const total = countRow.count;
+    const total = await client().task.count({ where });
     const pageSize = input.pageSize ?? 20;
     const totalPages = Math.max(1, Math.ceil(total / pageSize));
     const page = Math.min(input.page ?? 1, totalPages);
-    const sortColumn = TASK_SORT_COLUMNS[input.sort ?? "createdAt"];
-    const order = input.order === "asc" ? "ASC" : "DESC";
-
-    const rows = db
-      .prepare(
-        `SELECT * FROM tasks${whereSql}
-         ORDER BY ${sortColumn} ${order}, created_at DESC, id DESC
-         LIMIT ? OFFSET ?`,
-      )
-      .all(...params, pageSize, (page - 1) * pageSize) as unknown as TaskRow[];
+    const sortField = TASK_SORT_FIELDS[input.sort ?? "createdAt"];
+    const order = input.order === "asc" ? "asc" : "desc";
+    const rows = await client().task.findMany({
+      where,
+      orderBy: [
+        { [sortField]: order },
+        { createdAt: "desc" },
+        { id: "desc" },
+      ] as Prisma.TaskOrderByWithRelationInput[],
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    });
 
     return {
       tasks: rows.map(mapTask),
@@ -186,12 +242,20 @@ export const taskRepository = {
     };
   },
 
-  remove(id: string): boolean {
-    return db.prepare("DELETE FROM tasks WHERE id = ?").run(id).changes > 0;
+  async remove(id: string): Promise<boolean> {
+    try {
+      await client().task.delete({ where: { id } });
+      return true;
+    } catch (error) {
+      if (isRecordNotFound(error)) {
+        return false;
+      }
+      throw error;
+    }
   },
 
-  update(id: string, patch: TaskPatch): Task | null {
-    const current = this.findById(id);
+  async update(id: string, patch: TaskPatch): Promise<Task | null> {
+    const current = await this.findById(id);
     if (!current) {
       return null;
     }
@@ -200,58 +264,54 @@ export const taskRepository = {
       ...patch,
       updatedAt: new Date().toISOString(),
     };
-    db.prepare(
-      `UPDATE tasks
-       SET status = ?, model = ?, current_step = ?, total_steps = ?, error = ?,
-           updated_at = ?, started_at = ?, finished_at = ?
-       WHERE id = ?`,
-    ).run(
-      next.status,
-      next.model,
-      next.currentStep,
-      next.totalSteps,
-      next.error,
-      next.updatedAt,
-      next.startedAt,
-      next.finishedAt,
-      id,
-    );
+    await client().task.update({
+      where: { id },
+      data: {
+        status: next.status,
+        model: next.model,
+        currentStep: next.currentStep,
+        totalSteps: next.totalSteps,
+        error: next.error,
+        updatedAt: next.updatedAt,
+        startedAt: next.startedAt,
+        finishedAt: next.finishedAt,
+      },
+    });
     return this.findById(id);
   },
 
-  stats(workspaceId?: string): TaskStats {
-    const totalRow = workspaceId
-      ? (db
-          .prepare("SELECT COUNT(*) AS count FROM tasks WHERE workspace_id = ?")
-          .get(workspaceId) as { count: number })
-      : (db.prepare("SELECT COUNT(*) AS count FROM tasks").get() as { count: number });
-    const statusRows = workspaceId
-      ? (db
-          .prepare("SELECT status, COUNT(*) AS count FROM tasks WHERE workspace_id = ? GROUP BY status")
-          .all(workspaceId) as unknown as Array<{ status: TaskStatusType; count: number }>)
-      : (db
-          .prepare("SELECT status, COUNT(*) AS count FROM tasks GROUP BY status")
-          .all() as unknown as Array<{ status: TaskStatusType; count: number }>);
+  async stats(workspaceId?: string): Promise<TaskStats> {
+    const where: Prisma.TaskWhereInput = workspaceId ? { workspaceId } : {};
+    const total = await client().task.count({ where });
+    const statusRows = await client().task.groupBy({
+      by: ["status"],
+      where,
+      _count: { _all: true },
+    });
 
     const byStatus = Object.fromEntries(
       TaskStatus.options.map((status) => [status, 0]),
     ) as Record<TaskStatusType, number>;
     for (const row of statusRows) {
-      byStatus[row.status] = row.count;
+      byStatus[row.status as TaskStatusType] = row._count._all;
     }
 
-    const finished = this.list(workspaceId).filter((task) => task.finishedAt);
+    const finished = (await this.list(workspaceId)).filter((task) => task.finishedAt);
     const started = finished.filter((task) => task.startedAt);
     const durations = started.map(
-      (task) => new Date(task.finishedAt as string).getTime() - new Date(task.startedAt as string).getTime(),
+      (task) =>
+        new Date(task.finishedAt as string).getTime() -
+        new Date(task.startedAt as string).getTime(),
     );
     const avgDurationMs =
-      durations.length > 0 ? Math.round(durations.reduce((sum, value) => sum + value, 0) / durations.length) : null;
+      durations.length > 0
+        ? Math.round(durations.reduce((sum, value) => sum + value, 0) / durations.length)
+        : null;
     const completed = finished.filter((task) => task.status === "completed").length;
     const successRate = finished.length > 0 ? completed / finished.length : null;
 
     return {
-      total: totalRow.count,
+      total,
       byStatus,
       avgDurationMs,
       successRate,
@@ -260,92 +320,96 @@ export const taskRepository = {
 };
 
 export const eventRepository = {
-  nextSeq(taskId: string): number {
-    const row = db
-      .prepare("SELECT MAX(seq) AS max_seq FROM task_events WHERE task_id = ?")
-      .get(taskId) as { max_seq: number | null };
-    return (row.max_seq ?? 0) + 1;
+  async nextSeq(taskId: string): Promise<number> {
+    const result = await client().taskEvent.aggregate({
+      where: { taskId },
+      _max: { seq: true },
+    });
+    return (result._max.seq ?? 0) + 1;
   },
 
-  insert(event: TaskEvent): void {
-    db.prepare(
-      `INSERT INTO task_events (id, task_id, seq, type, payload, created_at)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-    ).run(
-      event.id,
-      event.taskId,
-      event.seq,
-      event.type,
-      JSON.stringify(event.payload),
-      event.createdAt,
-    );
+  async insert(event: TaskEvent): Promise<void> {
+    await client().taskEvent.create({
+      data: {
+        id: event.id,
+        taskId: event.taskId,
+        seq: event.seq,
+        type: event.type,
+        payload: event.payload as unknown as Prisma.InputJsonValue,
+        createdAt: event.createdAt,
+      },
+    });
   },
 
-  listByTask(taskId: string): TaskEvent[] {
-    const rows = db
-      .prepare("SELECT * FROM task_events WHERE task_id = ? ORDER BY seq ASC")
-      .all(taskId) as unknown as EventRow[];
-    return rows.map((row) => ({
-      id: row.id,
-      taskId: row.task_id,
-      seq: row.seq,
-      type: row.type,
-      createdAt: row.created_at,
-      payload: JSON.parse(row.payload),
-    })) as TaskEvent[];
+  async listByTask(taskId: string): Promise<TaskEvent[]> {
+    const rows = await client().taskEvent.findMany({
+      where: { taskId },
+      orderBy: { seq: "asc" },
+    });
+    return rows.map(mapEvent);
   },
 
-  deleteByTask(taskId: string): number {
-    return db.prepare("DELETE FROM task_events WHERE task_id = ?").run(taskId).changes;
+  async deleteByTask(taskId: string): Promise<number> {
+    const result = await client().taskEvent.deleteMany({ where: { taskId } });
+    return result.count;
   },
 };
 
 export const workspaceRepository = {
-  list(): Workspace[] {
-    const rows = db
-      .prepare("SELECT * FROM workspaces ORDER BY created_at ASC")
-      .all() as unknown as WorkspaceRow[];
+  async list(): Promise<Workspace[]> {
+    const rows = await client().workspace.findMany({
+      orderBy: { createdAt: "asc" },
+    });
     return rows.map(mapWorkspace);
   },
 
-  findById(id: string): Workspace | null {
-    const row = db.prepare("SELECT * FROM workspaces WHERE id = ?").get(id) as
-      | WorkspaceRow
-      | undefined;
+  async findById(id: string): Promise<Workspace | null> {
+    const row = await client().workspace.findUnique({ where: { id } });
     return row ? mapWorkspace(row) : null;
   },
 
-  create(input: { name: string; description: string }): Workspace {
+  async create(input: { name: string; description: string }): Promise<Workspace> {
     const now = new Date().toISOString();
     const id = randomUUID();
-    db.prepare(
-      `INSERT INTO workspaces (id, name, description, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?)`,
-    ).run(id, input.name, input.description, now, now);
-    const created = this.findById(id);
+    await client().workspace.create({
+      data: {
+        id,
+        name: input.name,
+        description: input.description,
+        createdAt: now,
+        updatedAt: now,
+      },
+    });
+    const created = await this.findById(id);
     if (!created) {
       throw new Error("工作区创建失败");
     }
     return created;
   },
 
-  taskCount(id: string): number {
-    const row = db
-      .prepare("SELECT COUNT(*) AS count FROM tasks WHERE workspace_id = ?")
-      .get(id) as { count: number };
-    return row.count;
+  async taskCount(id: string): Promise<number> {
+    return client().task.count({ where: { workspaceId: id } });
   },
 
-  remove(id: string): boolean {
+  async remove(id: string): Promise<boolean> {
     if (id === "default") {
       return false;
     }
-    const removed = db
-      .transaction(() => {
-        db.prepare("UPDATE tasks SET workspace_id = 'default' WHERE workspace_id = ?").run(id);
-        return db.prepare("DELETE FROM workspaces WHERE id = ?").run(id).changes;
-      })();
-    return removed > 0;
+    return withTransaction(async () => {
+      await client().task.updateMany({
+        where: { workspaceId: id },
+        data: { workspaceId: "default" },
+      });
+      try {
+        await client().workspace.delete({ where: { id } });
+        return true;
+      } catch (error) {
+        if (isRecordNotFound(error)) {
+          return false;
+        }
+        throw error;
+      }
+    });
   },
 };
 
@@ -354,12 +418,12 @@ export const workspaceRepository = {
  * 同时在数据库中登记元数据，便于任务详情页预览和下载。
  */
 export const artifactRepository = {
-  save(input: {
+  async save(input: {
     taskId: string;
     fileName: string;
     content: string;
     mimeType: string;
-  }): TaskArtifact {
+  }): Promise<TaskArtifact> {
     const safeName = sanitizeFileName(input.fileName);
     const storageKey = `${input.taskId}/${randomUUID()}-${safeName}`;
     const filePath = resolveArtifactPath(storageKey);
@@ -374,49 +438,40 @@ export const artifactRepository = {
       sizeBytes: fs.statSync(filePath).size,
       createdAt: new Date().toISOString(),
     };
-    db.prepare(
-      `INSERT INTO artifacts
-        (id, task_id, name, storage_key, mime_type, size_bytes, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    ).run(
-      artifact.id,
-      artifact.taskId,
-      artifact.name,
-      storageKey,
-      artifact.mimeType,
-      artifact.sizeBytes,
-      artifact.createdAt,
-    );
+    await client().artifact.create({
+      data: {
+        id: artifact.id,
+        taskId: artifact.taskId,
+        name: artifact.name,
+        storageKey,
+        mimeType: artifact.mimeType,
+        sizeBytes: artifact.sizeBytes,
+        createdAt: artifact.createdAt,
+      },
+    });
     return artifact;
   },
 
-  listByTask(taskId: string): TaskArtifact[] {
-    const rows = db
-      .prepare(
-        `SELECT * FROM artifacts
-         WHERE task_id = ?
-         ORDER BY created_at DESC`,
-      )
-      .all(taskId) as unknown as ArtifactRow[];
+  async listByTask(taskId: string): Promise<TaskArtifact[]> {
+    const rows = await client().artifact.findMany({
+      where: { taskId },
+      orderBy: { createdAt: "desc" },
+    });
     return rows.map(mapArtifact);
   },
 
-  findById(id: string): TaskArtifact | null {
-    const row = db.prepare("SELECT * FROM artifacts WHERE id = ?").get(id) as
-      | ArtifactRow
-      | undefined;
+  async findById(id: string): Promise<TaskArtifact | null> {
+    const row = await client().artifact.findUnique({ where: { id } });
     return row ? mapArtifact(row) : null;
   },
 
-  readContent(id: string): { artifact: TaskArtifact; content: string } | null {
-    const row = db.prepare("SELECT * FROM artifacts WHERE id = ?").get(id) as
-      | ArtifactRow
-      | undefined;
+  async readContent(id: string): Promise<{ artifact: TaskArtifact; content: string } | null> {
+    const row = await client().artifact.findUnique({ where: { id } });
     if (!row) {
       return null;
     }
     try {
-      const filePath = resolveArtifactPath(row.storage_key);
+      const filePath = resolveArtifactPath(row.storageKey);
       return {
         artifact: mapArtifact(row),
         content: fs.readFileSync(filePath, "utf8"),
@@ -426,41 +481,22 @@ export const artifactRepository = {
     }
   },
 
-  deleteByTask(taskId: string): number {
-    const rows = db
-      .prepare("SELECT storage_key FROM artifacts WHERE task_id = ?")
-      .all(taskId) as unknown as ArtifactRow[];
+  async deleteByTask(taskId: string): Promise<number> {
+    const rows = await client().artifact.findMany({
+      where: { taskId },
+      select: { storageKey: true },
+    });
     for (const row of rows) {
       try {
-        fs.rmSync(resolveArtifactPath(row.storage_key), { force: true });
+        fs.rmSync(resolveArtifactPath(row.storageKey), { force: true });
       } catch {
         // 文件已不存在时无需中断删除任务
       }
     }
-    return db.prepare("DELETE FROM artifacts WHERE task_id = ?").run(taskId).changes;
+    const result = await client().artifact.deleteMany({ where: { taskId } });
+    return result.count;
   },
 };
-
-function mapWorkspace(row: WorkspaceRow): Workspace {
-  return {
-    id: row.id,
-    name: row.name,
-    description: row.description,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  };
-}
-
-function mapArtifact(row: ArtifactRow): TaskArtifact {
-  return {
-    id: row.id,
-    taskId: row.task_id,
-    name: row.name,
-    mimeType: row.mime_type,
-    sizeBytes: row.size_bytes,
-    createdAt: row.created_at,
-  };
-}
 
 function sanitizeFileName(raw: string): string {
   const normalized = raw.replace(/\\/g, "/");

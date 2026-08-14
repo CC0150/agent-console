@@ -2,7 +2,7 @@ import { create } from "zustand";
 import type { TaskEvent } from "@agent-console/contracts";
 import { openTaskStream } from "../lib/sse";
 
-type ConnectionState = "idle" | "connecting" | "open" | "closed";
+type ConnectionState = "idle" | "connecting" | "open" | "closed" | "ended";
 
 interface RunStoreState {
   events: TaskEvent[];
@@ -22,19 +22,39 @@ export const useRunStore = create<RunStoreState>((set, get) => ({
     get().disconnect();
     set({ events: [], connection: "connecting" });
 
-    source = openTaskStream(taskId, (event) => {
-      set((state) => {
-        if (state.events.some((existing) => existing.id === event.id)) {
-          return state;
+    const stream = openTaskStream(
+      taskId,
+      (event) => {
+        set((state) => {
+          if (state.events.some((existing) => existing.id === event.id)) {
+            return state;
+          }
+          return {
+            events: [...state.events, event].sort((a, b) => a.seq - b.seq),
+          };
+        });
+      },
+      () => {
+        if (source !== stream) {
+          return;
         }
-        return {
-          events: [...state.events, event].sort((a, b) => a.seq - b.seq),
-        };
-      });
-    });
+        source = null;
+        stream.close();
+        set({ connection: "ended" });
+      },
+    );
+    source = stream;
 
-    source.onopen = () => set({ connection: "open" });
-    source.onerror = () => set({ connection: "closed" });
+    stream.onopen = () => {
+      if (source === stream) {
+        set({ connection: "open" });
+      }
+    };
+    stream.onerror = () => {
+      if (source === stream) {
+        set({ connection: "closed" });
+      }
+    };
   },
 
   disconnect: () => {

@@ -1,0 +1,64 @@
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Workspace {
+  id          String   @id
+  name        String
+  description String   @default("")
+  createdAt   DateTime @map("created_at")
+  updatedAt   DateTime @map("updated_at")
+
+  @@map("workspaces")
+}
+
+model Task {
+  id          String      @id
+  goal        String
+  workspaceId String      @default("default") @map("workspace_id")
+  status      String
+  model       String      @default("mock")
+  currentStep Int         @default(0) @map("current_step")
+  totalSteps  Int         @default(0) @map("total_steps")
+  error       String?
+  createdAt   DateTime    @map("created_at")
+  updatedAt   DateTime    @map("updated_at")
+  startedAt   DateTime?   @map("started_at")
+  finishedAt  DateTime?   @map("finished_at")
+  events      TaskEvent[]
+  artifacts   Artifact[]
+
+  @@index([workspaceId, createdAt(sort: Desc)], map: "idx_tasks_workspace_created")
+  @@map("tasks")
+}
+
+model TaskEvent {
+  id        String   @id
+  taskId    String   @map("task_id")
+  seq       Int
+  type      String
+  payload   Json
+  createdAt DateTime @map("created_at")
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, seq], map: "idx_task_events_task_seq")
+  @@map("task_events")
+}
+
+model Artifact {
+  id         String   @id
+  taskId     String   @map("task_id")
+  name       String
+  storageKey String   @unique @map("storage_key")
+  mimeType   String   @map("mime_type")
+  sizeBytes  Int      @map("size_bytes")
+  createdAt  DateTime @map("created_at")
+  task       Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId, createdAt(sort: Desc)], map: "idx_artifacts_task_created")
+  @@map("artifacts")
+}

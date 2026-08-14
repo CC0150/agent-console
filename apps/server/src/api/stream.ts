@@ -15,9 +15,9 @@ function writeEvent(res: ServerResponse, event: TaskEvent): void {
 
 export const streamRouter = Router({ mergeParams: true });
 
-streamRouter.get("/", (req, res) => {
+streamRouter.get("/", async (req, res) => {
   const taskId = (req.params as Record<string, string>).id;
-  const task = taskRepository.findById(taskId);
+  const task = await taskRepository.findById(taskId);
   if (!task) {
     throw new AppError(404, "task_not_found", "任务不存在");
   }
@@ -31,7 +31,9 @@ streamRouter.get("/", (req, res) => {
   res.write("retry: 3000\n\n");
 
   const lastEventId = Number(req.headers["last-event-id"] ?? 0) || 0;
-  const history = eventRepository.listByTask(taskId).filter((event) => event.seq > lastEventId);
+  const history = (await eventRepository.listByTask(taskId)).filter(
+    (event) => event.seq > lastEventId,
+  );
   for (const event of history) {
     writeEvent(res, event);
   }

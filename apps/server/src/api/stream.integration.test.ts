@@ -17,14 +17,12 @@ let server: Server;
 
 beforeAll(async () => {
   tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "agent-console-integration-"));
-  process.env.DATABASE_PATH = path.join(tempDir, "test.db");
   process.env.REPORTS_DIR = path.join(tempDir, "reports");
   process.env.LLM_PROVIDER = "mock";
 
-  const { migrate } = await import("../db/schema");
-  migrate();
-
   const { createApp } = await import("../app");
+  const { migrate } = await import("../db/schema");
+  await migrate();
   await import("../tools");
 
   const app = createApp();
@@ -37,7 +35,7 @@ beforeAll(async () => {
 afterAll(async () => {
   server?.close();
   const { closeDatabase } = await import("../db/client");
-  closeDatabase();
+  await closeDatabase();
   fs.rmSync(tempDir, { recursive: true, force: true });
 });
 
@@ -120,7 +118,9 @@ describe("SSE 流接口", () => {
     const firstEvents = await readStreamUntilTerminal(firstStream, taskId);
     const oldEventIds = new Set(firstEvents.map((event) => event.id));
 
-    const beforeListResponse = await fetch(`${baseUrl}/api/tasks`);
+    const beforeListResponse = await fetch(
+      `${baseUrl}/api/tasks?q=${encodeURIComponent(taskId)}`,
+    );
     const beforeList = (await beforeListResponse.json()) as { total: number };
     const beforeArtifactsResponse = await fetch(`${baseUrl}/api/tasks/${taskId}/artifacts`);
     const beforeArtifacts = (await beforeArtifactsResponse.json()) as {
@@ -152,7 +152,9 @@ describe("SSE 流接口", () => {
     expect(rerunBody.task.startedAt).toBeNull();
     expect(rerunBody.task.finishedAt).toBeNull();
 
-    const afterListResponse = await fetch(`${baseUrl}/api/tasks`);
+    const afterListResponse = await fetch(
+      `${baseUrl}/api/tasks?q=${encodeURIComponent(taskId)}`,
+    );
     const afterList = (await afterListResponse.json()) as { total: number };
     expect(afterList.total).toBe(beforeList.total);
 

@@ -1,22 +1,12 @@
-import type { TaskEvent } from "@agent-console/contracts";
-
-const TASK_EVENT_TYPES = [
-  "task.created",
-  "task.plan_updated",
-  "task.status_changed",
-  "tool.started",
-  "tool.finished",
-  "message.delta",
-  "message.assistant",
-  "task.completed",
-  "task.failed",
-] as const;
+import { TASK_EVENT_TYPES, type TaskEvent } from "@agent-console/contracts";
 
 export function openTaskStream(
   taskId: string,
   onEvent: (event: TaskEvent) => void,
+  onEnd?: () => void,
 ): EventSource {
   const source = new EventSource(`/api/tasks/${taskId}/stream`);
+  let ended = false;
   const handler = (message: MessageEvent<string>) => {
     try {
       onEvent(JSON.parse(message.data) as TaskEvent);
@@ -27,5 +17,13 @@ export function openTaskStream(
   for (const type of TASK_EVENT_TYPES) {
     source.addEventListener(type, handler);
   }
+  source.addEventListener("stream.end", () => {
+    if (ended) {
+      return;
+    }
+    ended = true;
+    source.close();
+    onEnd?.();
+  });
   return source;
 }

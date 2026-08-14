@@ -36,7 +36,7 @@ export const writeReportTool: Tool<WriteReportInput> = {
       );
     }
 
-    const artifact = artifactRepository.save({
+    const artifact = await artifactRepository.save({
       taskId: ctx.taskId,
       fileName: baseName,
       content: input.content,

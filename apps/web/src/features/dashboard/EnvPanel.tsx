@@ -6,7 +6,7 @@ const baseRows = [
   {
     label: "数据存储",
     code: "存储",
-    value: "SQLite",
+    value: "PostgreSQL (Neon)",
     icon: Database,
     iconClass: "text-cyan-400",
   },

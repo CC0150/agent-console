@@ -11,7 +11,7 @@ flowchart LR
   Runner --> LLM[LLMProvider]
   Runner --> Registry[ToolRegistry]
   Registry --> Tool[http_request, write_report]
-  Repo --> DB[(SQLite)]
+  Repo --> DB[(PostgreSQL / Prisma)]
   EventBus --> SSE[SSE 客户端]
 ```
 

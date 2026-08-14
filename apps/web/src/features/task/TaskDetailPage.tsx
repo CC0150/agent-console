@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { TaskAction } from "@agent-console/contracts";
+import type { Task, TaskAction, TaskArtifact } from "@agent-console/contracts";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -32,30 +32,44 @@ import { TaskActions } from "./TaskActions";
 import { TaskPageSkeleton } from "./TaskPageSkeleton";
 import { ToolCallCard } from "./ToolCallCard";
 
+const TERMINAL_STATUSES: Task["status"][] = ["completed", "failed", "cancelled"];
+
+function isTerminalTask(task: Task | undefined): boolean {
+  return task != null && TERMINAL_STATUSES.includes(task.status);
+}
+
 export function TaskDetailPage() {
   const { taskId = "" } = useParams<{ taskId: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { events: liveEvents, connect, disconnect } = useRunStore();
+  const { events: liveEvents, connection, connect, disconnect } = useRunStore();
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   const taskQuery = useQuery({
     queryKey: ["task", taskId],
     queryFn: () => api.getTask(taskId),
     enabled: Boolean(taskId),
-    refetchInterval: 2_000,
+    refetchInterval: (query) =>
+      connection === "ended" || isTerminalTask(query.state.data?.task)
+        ? false
+        : 2_000,
   });
+  const task = taskQuery.data?.task;
+  const terminal = isTerminalTask(task);
   const historyQuery = useQuery({
     queryKey: ["events", taskId],
     queryFn: () => api.getEvents(taskId),
     enabled: Boolean(taskId),
-    refetchInterval: 2_000,
+    refetchInterval:
+      connection === "open" || connection === "ended" || terminal
+        ? false
+        : 2_000,
   });
   const artifactsQuery = useQuery({
     queryKey: ["artifacts", taskId],
     queryFn: () => api.listArtifacts(taskId),
     enabled: Boolean(taskId),
-    refetchInterval: 2_000,
+    refetchInterval: connection === "ended" || terminal ? false : 2_000,
   });
   const workspacesQuery = useQuery({
     queryKey: ["workspaces"],
@@ -70,17 +84,49 @@ export function TaskDetailPage() {
     return () => disconnect();
   }, [taskId, connect, disconnect]);
 
-  const task = taskQuery.data?.task;
   const workspace = workspacesQuery.data?.workspaces.find(
     (item) => item.id === task?.workspaceId,
   );
-  const terminal = task != null && ["completed", "failed", "cancelled"].includes(task.status);
 
   useEffect(() => {
     if (terminal) {
       disconnect();
     }
   }, [terminal, disconnect]);
+
+  useEffect(() => {
+    if (connection !== "ended") {
+      return;
+    }
+    queryClient.invalidateQueries({ queryKey: ["task", taskId] });
+    queryClient.invalidateQueries({ queryKey: ["events", taskId] });
+    queryClient.invalidateQueries({ queryKey: ["artifacts", taskId] });
+  }, [connection, taskId, queryClient]);
+
+  useEffect(() => {
+    const artifactEvents = liveEvents.filter(
+      (event) => event.type === "artifact.created",
+    );
+    if (artifactEvents.length === 0) {
+      return;
+    }
+    queryClient.setQueryData<{ artifacts: TaskArtifact[] }>(
+      ["artifacts", taskId],
+      (current) => {
+        const artifactsById = new Map(
+          (current?.artifacts ?? []).map((artifact) => [artifact.id, artifact]),
+        );
+        for (const event of artifactEvents) {
+          artifactsById.set(event.payload.artifact.id, event.payload.artifact);
+        }
+        return {
+          artifacts: [...artifactsById.values()].sort(
+            (a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt),
+          ),
+        };
+      },
+    );
+  }, [liveEvents, taskId, queryClient]);
 
   const allEvents = useMemo(
     () => mergeEvents(historyQuery.data?.events ?? [], liveEvents),

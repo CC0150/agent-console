@@ -77,16 +77,17 @@ export class TaskRunner {
     return runner;
   }
 
-  static resume(task: Task): TaskRunner {
+  static async resume(task: Task): Promise<TaskRunner> {
     const existing = TaskRunner.activeRunners.get(task.id);
     if (existing) {
       return existing;
     }
+    const events = await eventRepository.listByTask(task.id);
     const runner = new TaskRunner(
       task.id,
       task.goal,
       createLLMProvider(config.llm),
-      rebuildRunnerState(task, eventRepository.listByTask(task.id)),
+      rebuildRunnerState(task, events),
     );
     TaskRunner.activeRunners.set(task.id, runner);
     void runner.runResumed().finally(() => TaskRunner.activeRunners.delete(task.id));
@@ -140,7 +141,7 @@ export class TaskRunner {
       if (mode === "fresh") {
         await this.transition("planning");
       } else {
-        const current = taskRepository.findById(this.taskId);
+        const current = await taskRepository.findById(this.taskId);
         if (!current || (current.status !== "paused" && current.status !== "failed")) {
           throw new Error(`任务不是可恢复的暂停或失败状态: ${this.taskId}`);
         }
@@ -234,8 +235,8 @@ export class TaskRunner {
         input: call.arguments,
       });
     }
-    const event = withTransaction(() => {
-      taskRepository.update(this.taskId, { totalSteps: this.plan.length });
+    const event = await withTransaction(async () => {
+      await taskRepository.update(this.taskId, { totalSteps: this.plan.length });
       return createEvent(this.taskId, "task.plan_updated", { plan: this.plan });
     });
     publishEvent(event);
@@ -299,15 +300,15 @@ export class TaskRunner {
 
   private async finishToolCall(toolCall: ToolCall): Promise<void> {
     this.executedSteps += 1;
-    const event = withTransaction(() => {
-      taskRepository.update(this.taskId, { currentStep: this.executedSteps });
+    const event = await withTransaction(async () => {
+      await taskRepository.update(this.taskId, { currentStep: this.executedSteps });
       return createEvent(this.taskId, "tool.finished", { toolCall });
     });
     publishEvent(event);
   }
 
   private async transition(to: TaskStatus, extra: TaskPatch = {}): Promise<void> {
-    const current = taskRepository.findById(this.taskId);
+    const current = await taskRepository.findById(this.taskId);
     if (!current) {
       throw new Error(`任务不存在: ${this.taskId}`);
     }
@@ -328,12 +329,12 @@ export class TaskRunner {
       patch.finishedAt = now;
     }
 
-    const event = withTransaction(() => {
-      const updated = taskRepository.update(this.taskId, patch);
+    const event = await withTransaction(async () => {
+      const updated = await taskRepository.update(this.taskId, patch);
       if (!updated) {
         throw new Error(`任务不存在: ${this.taskId}`);
       }
-      return createEvent(this.taskId, "task.status_changed", {
+      return await createEvent(this.taskId, "task.status_changed", {
         from: current.status,
         to,
       });
@@ -345,7 +346,7 @@ export class TaskRunner {
     if (!this.pauseRequested) {
       return;
     }
-    const current = taskRepository.findById(this.taskId);
+    const current = await taskRepository.findById(this.taskId);
     if (current && current.status !== "paused") {
       await this.transition("paused");
     }
@@ -353,7 +354,7 @@ export class TaskRunner {
       this.resumeWaiter = resolve;
     });
     if (!this.abortController.signal.aborted) {
-      const resumed = taskRepository.findById(this.taskId);
+      const resumed = await taskRepository.findById(this.taskId);
       if (resumed && resumed.status === "paused") {
         await this.transition("running");
       }
@@ -361,7 +362,7 @@ export class TaskRunner {
   }
 
   private async finishCancelled(): Promise<void> {
-    const current = taskRepository.findById(this.taskId);
+    const current = await taskRepository.findById(this.taskId);
     if (!current || TERMINAL_STATUSES.includes(current.status)) {
       return;
     }
@@ -369,7 +370,7 @@ export class TaskRunner {
   }
 
   private emit(type: TaskEvent["type"], payload: TaskEvent["payload"]): Promise<TaskEvent> {
-    return Promise.resolve(emitEvent(this.taskId, type, payload));
+    return emitEvent(this.taskId, type, payload);
   }
 }
 

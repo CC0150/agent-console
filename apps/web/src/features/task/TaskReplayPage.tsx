@@ -1,4 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import type { Task } from "@agent-console/contracts";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -49,10 +50,16 @@ import { ToolCallCard } from "./ToolCallCard";
 type ReplaySpeed = 1 | 2 | 4 | 8;
 
 const REPLAY_SPEEDS: ReplaySpeed[] = [1, 2, 4, 8];
+const TERMINAL_STATUSES: Task["status"][] = ["completed", "failed", "cancelled"];
+
+function isTerminalTask(task: Task | undefined): boolean {
+  return task != null && TERMINAL_STATUSES.includes(task.status);
+}
 
 export function TaskReplayPage() {
   const { taskId = "" } = useParams<{ taskId: string }>();
-  const { events: liveEvents, connect, disconnect } = useRunStore();
+  const queryClient = useQueryClient();
+  const { events: liveEvents, connection, connect, disconnect } = useRunStore();
   const [cursor, setCursor] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState<ReplaySpeed>(2);
@@ -67,13 +74,21 @@ export function TaskReplayPage() {
     queryKey: ["task", taskId],
     queryFn: () => api.getTask(taskId),
     enabled: Boolean(taskId),
-    refetchInterval: 2_000,
+    refetchInterval: (query) =>
+      connection === "ended" || isTerminalTask(query.state.data?.task)
+        ? false
+        : 2_000,
   });
+  const task = taskQuery.data?.task;
+  const terminal = isTerminalTask(task);
   const historyQuery = useQuery({
     queryKey: ["events", taskId],
     queryFn: () => api.getEvents(taskId),
     enabled: Boolean(taskId),
-    refetchInterval: 2_000,
+    refetchInterval:
+      connection === "open" || connection === "ended" || terminal
+        ? false
+        : 2_000,
   });
   const workspacesQuery = useQuery({
     queryKey: ["workspaces"],
@@ -88,18 +103,23 @@ export function TaskReplayPage() {
     return () => disconnect();
   }, [taskId, connect, disconnect]);
 
-  const task = taskQuery.data?.task;
   const workspace = workspacesQuery.data?.workspaces.find(
     (item) => item.id === task?.workspaceId,
   );
-  const terminal =
-    task != null && ["completed", "failed", "cancelled"].includes(task.status);
 
   useEffect(() => {
     if (terminal) {
       disconnect();
     }
   }, [terminal, disconnect]);
+
+  useEffect(() => {
+    if (connection !== "ended") {
+      return;
+    }
+    queryClient.invalidateQueries({ queryKey: ["task", taskId] });
+    queryClient.invalidateQueries({ queryKey: ["events", taskId] });
+  }, [connection, taskId, queryClient]);
 
   const allEvents = useMemo(
     () => mergeEvents(historyQuery.data?.events ?? [], liveEvents),
