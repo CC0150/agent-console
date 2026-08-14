@@ -184,4 +184,33 @@ describe("ConversationView", () => {
     expect(html).toContain("write_report");
     expect(html).toContain("成功");
   });
+
+  it("渲染 Markdown，并以可读文案展示结束原因和 Token 用量", () => {
+    const html = renderToStaticMarkup(
+      <ConversationView
+        events={[
+          event(1, "message.assistant", {
+            content:
+              "**当前实况（下午）**\n- 气温：约 **27.6°C**（体感偏闷热）",
+            finishReason: "stop",
+            usage: {
+              promptTokens: 10176,
+              completionTokens: 650,
+              totalTokens: 10826,
+            },
+            toolCalls: [],
+          }),
+        ]}
+        goal={GOAL}
+        createdAt={CREATED_AT}
+      />,
+    );
+
+    expect(html).toContain("<strong>当前实况（下午）</strong>");
+    expect(html).toContain("<li class=\"leading-6\">");
+    expect(html).toContain("结束：自然结束");
+    expect(html).toContain("上下文 10176 tokens");
+    expect(html).toContain("生成 650 tokens");
+    expect(html).toContain("合计 10826 tokens");
+  });
 });

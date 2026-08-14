@@ -1,6 +1,7 @@
 import type { TaskEvent } from "@agent-console/contracts";
 import { Bot, Loader2, MessageSquareText, User } from "lucide-react";
 import { useMemo } from "react";
+import { MarkdownContent } from "./MarkdownContent";
 import { ToolCallCard } from "./ToolCallCard";
 import {
   buildConversation,
@@ -14,6 +15,14 @@ interface ConversationViewProps {
   createdAt?: string;
   status?: string;
 }
+
+const FINISH_REASON_LABELS: Record<string, string> = {
+  stop: "自然结束",
+  length: "达到长度上限",
+  tool_calls: "调用工具后结束",
+  function_call: "调用函数后结束",
+  content_filter: "内容被过滤",
+};
 
 export function ConversationView({
   events,
@@ -91,22 +100,29 @@ function renderItem(item: ConversationItem) {
         </div>
 
         {item.content ? (
-          <div className="whitespace-pre-wrap break-words rounded-md border border-ink-700/25 bg-ink-950/60 px-4 py-3 text-[15px] leading-6 text-ink-200">
-            {item.content}
+          <div className="min-w-0 overflow-x-auto break-words rounded-md border border-ink-700/25 bg-ink-950/60 px-4 py-3">
+            <MarkdownContent content={item.content} />
           </div>
         ) : null}
 
         {item.finishReason || item.usage ? (
           <div className="mt-2 flex flex-wrap items-center gap-2 font-mono text-xs text-ink-500">
             {item.finishReason ? (
-              <span className="rounded border border-ink-700/30 bg-ink-700/10 px-2 py-0.5">
-                结束原因 {item.finishReason}
+              <span
+                className="rounded border border-ink-700/30 bg-ink-700/10 px-2 py-0.5"
+                title={`结束原因：${item.finishReason}`}
+              >
+                结束：{FINISH_REASON_LABELS[item.finishReason] ?? item.finishReason}
               </span>
             ) : null}
             {item.usage ? (
-              <span className="rounded border border-ink-700/30 bg-ink-700/10 px-2 py-0.5">
-                Token {item.usage.promptTokens} / {item.usage.completionTokens} /{" "}
-                {item.usage.totalTokens}
+              <span
+                className="rounded border border-ink-700/30 bg-ink-700/10 px-2 py-0.5"
+                title={`上下文 ${item.usage.promptTokens} tokens · 生成 ${item.usage.completionTokens} tokens · 合计 ${item.usage.totalTokens} tokens`}
+              >
+                上下文 {item.usage.promptTokens} tokens · 生成{" "}
+                {item.usage.completionTokens} tokens · 合计{" "}
+                {item.usage.totalTokens} tokens
               </span>
             ) : null}
           </div>
