@@ -22,6 +22,7 @@ let approvalRepository: Awaited<
 beforeAll(async () => {
   tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "agent-console-integration-"));
   process.env.DATABASE_PATH = path.join(tempDir, "test.db");
+  process.env.REPORTS_DIR = path.join(tempDir, "reports");
   process.env.LLM_PROVIDER = "mock";
   process.env.APPROVAL_ENABLED = "true";
 
@@ -100,6 +101,19 @@ describe("SSE 流接口", () => {
     const taskResponse = await fetch(`${baseUrl}/api/tasks/${taskId}`);
     const taskBody = (await taskResponse.json()) as { task: { status: string } };
     expect(taskBody.task.status).toBe("completed");
+
+    const artifactsResponse = await fetch(`${baseUrl}/api/tasks/${taskId}/artifacts`);
+    const artifactsBody = (await artifactsResponse.json()) as {
+      artifacts: Array<{ id: string; name: string }>;
+    };
+    expect(artifactsBody.artifacts).toHaveLength(1);
+
+    const artifact = artifactsBody.artifacts[0];
+    const artifactResponse = await fetch(
+      `${baseUrl}/api/tasks/${taskId}/artifacts/${artifact.id}/content`,
+    );
+    expect(artifactResponse.status).toBe(200);
+    expect(await artifactResponse.text()).toContain("岗位调研报告");
 
     await fetch(`${baseUrl}/api/tasks/${taskId}`, { method: "DELETE" });
   });

@@ -1,8 +1,11 @@
+import fs from "node:fs";
+import path from "node:path";
 import { randomUUID } from "node:crypto";
 import {
   ApprovalRequest,
   ApprovalStatus,
   TaskStatus,
+  TaskArtifact,
   type Task,
   type TaskEvent,
   type TaskListQuery,
@@ -12,6 +15,7 @@ import {
   type ApprovalStatus as ApprovalStatusType,
   type Workspace,
 } from "@agent-console/contracts";
+import { config } from "../config";
 import { db } from "./client";
 
 interface TaskRow {
@@ -56,6 +60,16 @@ interface ApprovalRow {
   status: string;
   requested_at: string;
   resolved_at: string | null;
+}
+
+interface ArtifactRow {
+  id: string;
+  task_id: string;
+  name: string;
+  storage_key: string;
+  mime_type: string;
+  size_bytes: number;
+  created_at: string;
 }
 
 export type TaskPatch = Partial<
@@ -420,6 +434,98 @@ export const approvalRepository = {
   },
 };
 
+/**
+ * 产出物仓储：负责把工具生成的文件写入 reports 目录，
+ * 同时在数据库中登记元数据，便于任务详情页预览和下载。
+ */
+export const artifactRepository = {
+  save(input: {
+    taskId: string;
+    fileName: string;
+    content: string;
+    mimeType: string;
+  }): TaskArtifact {
+    const safeName = sanitizeFileName(input.fileName);
+    const storageKey = `${input.taskId}/${randomUUID()}-${safeName}`;
+    const filePath = resolveArtifactPath(storageKey);
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    fs.writeFileSync(filePath, input.content, "utf8");
+
+    const artifact: TaskArtifact = {
+      id: randomUUID(),
+      taskId: input.taskId,
+      name: safeName,
+      mimeType: input.mimeType,
+      sizeBytes: fs.statSync(filePath).size,
+      createdAt: new Date().toISOString(),
+    };
+    db.prepare(
+      `INSERT INTO artifacts
+        (id, task_id, name, storage_key, mime_type, size_bytes, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      artifact.id,
+      artifact.taskId,
+      artifact.name,
+      storageKey,
+      artifact.mimeType,
+      artifact.sizeBytes,
+      artifact.createdAt,
+    );
+    return artifact;
+  },
+
+  listByTask(taskId: string): TaskArtifact[] {
+    const rows = db
+      .prepare(
+        `SELECT * FROM artifacts
+         WHERE task_id = ?
+         ORDER BY created_at DESC`,
+      )
+      .all(taskId) as unknown as ArtifactRow[];
+    return rows.map(mapArtifact);
+  },
+
+  findById(id: string): TaskArtifact | null {
+    const row = db.prepare("SELECT * FROM artifacts WHERE id = ?").get(id) as
+      | ArtifactRow
+      | undefined;
+    return row ? mapArtifact(row) : null;
+  },
+
+  readContent(id: string): { artifact: TaskArtifact; content: string } | null {
+    const row = db.prepare("SELECT * FROM artifacts WHERE id = ?").get(id) as
+      | ArtifactRow
+      | undefined;
+    if (!row) {
+      return null;
+    }
+    try {
+      const filePath = resolveArtifactPath(row.storage_key);
+      return {
+        artifact: mapArtifact(row),
+        content: fs.readFileSync(filePath, "utf8"),
+      };
+    } catch {
+      return null;
+    }
+  },
+
+  deleteByTask(taskId: string): number {
+    const rows = db
+      .prepare("SELECT storage_key FROM artifacts WHERE task_id = ?")
+      .all(taskId) as unknown as ArtifactRow[];
+    for (const row of rows) {
+      try {
+        fs.rmSync(resolveArtifactPath(row.storage_key), { force: true });
+      } catch {
+        // 文件已不存在时无需中断删除任务
+      }
+    }
+    return db.prepare("DELETE FROM artifacts WHERE task_id = ?").run(taskId).changes;
+  },
+};
+
 function mapWorkspace(row: WorkspaceRow): Workspace {
   return {
     id: row.id,
@@ -442,4 +548,31 @@ function mapApproval(row: ApprovalRow): ApprovalRequestType {
     requestedAt: row.requested_at,
     resolvedAt: row.resolved_at,
   });
+}
+
+function mapArtifact(row: ArtifactRow): TaskArtifact {
+  return {
+    id: row.id,
+    taskId: row.task_id,
+    name: row.name,
+    mimeType: row.mime_type,
+    sizeBytes: row.size_bytes,
+    createdAt: row.created_at,
+  };
+}
+
+function sanitizeFileName(raw: string): string {
+  const normalized = raw.replace(/\\/g, "/");
+  const base = path.basename(normalized).trim();
+  const safe = base.replace(/[<>:"/\\|?*\u0000-\u001F]/g, "_").slice(0, 120);
+  return safe || "report";
+}
+
+function resolveArtifactPath(storageKey: string): string {
+  const root = path.resolve(config.artifact.reportsDir);
+  const filePath = path.resolve(root, storageKey);
+  if (!filePath.startsWith(`${root}${path.sep}`)) {
+    throw new Error("非法的产出物存储路径");
+  }
+  return filePath;
 }

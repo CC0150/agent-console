@@ -47,6 +47,17 @@ CREATE TABLE IF NOT EXISTS approvals (
   FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS artifacts (
+  id TEXT PRIMARY KEY,
+  task_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  storage_key TEXT NOT NULL UNIQUE,
+  mime_type TEXT NOT NULL,
+  size_bytes INTEGER NOT NULL CHECK (size_bytes >= 0),
+  created_at TEXT NOT NULL,
+  FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS job_postings (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   title TEXT NOT NULL,
@@ -68,6 +79,9 @@ CREATE INDEX IF NOT EXISTS idx_tasks_workspace_created
 
 CREATE INDEX IF NOT EXISTS idx_approvals_task_status
   ON approvals(task_id, status);
+
+CREATE INDEX IF NOT EXISTS idx_artifacts_task_created
+  ON artifacts(task_id, created_at DESC);
 `;
 
 const seedJobs = [

@@ -11,6 +11,7 @@ export const EVENT_TYPE_STYLES: Record<TaskEvent["type"], string> = {
   "approval.resolved": "border-violet-500/25 bg-violet-500/10 text-violet-300",
   "message.delta": "border-ink-700/30 bg-ink-700/10 text-ink-300",
   "message.assistant": "border-ink-600/30 bg-ink-700/10 text-ink-200",
+  "artifact.created": "border-violet-500/25 bg-violet-500/10 text-violet-300",
   "task.completed": "border-mint-500/20 bg-mint-500/10 text-mint-300",
   "task.failed": "border-rose-500/20 bg-rose-500/10 text-rose-300",
 };
@@ -25,6 +26,7 @@ export const EVENT_TYPE_LABELS: Record<TaskEvent["type"], string> = {
   "approval.resolved": "审批完成",
   "message.delta": "增量输出",
   "message.assistant": "助手消息",
+  "artifact.created": "产出物",
   "task.completed": "任务完成",
   "task.failed": "任务失败",
 };
@@ -124,6 +126,8 @@ export function summarizeEvent(event: TaskEvent): string {
       return `${STATUS_LABELS[event.payload.from] ?? event.payload.from} -> ${STATUS_LABELS[event.payload.to] ?? event.payload.to}`;
     case "task.completed":
       return "任务完成";
+    case "artifact.created":
+      return `生成产出物：${event.payload.artifact.name}`;
     case "task.failed":
       return `失败：${event.payload.error}`;
     case "task.created":

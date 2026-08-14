@@ -19,6 +19,11 @@ export interface HttpToolConfig {
   timeoutMs: number;
 }
 
+export interface ArtifactConfig {
+  reportsDir: string;
+  maxBytes: number;
+}
+
 const provider = process.env.LLM_PROVIDER ?? "mock";
 
 export const config = {
@@ -32,6 +37,13 @@ export const config = {
     maxResponseBytes: Number(process.env.HTTP_TOOL_MAX_RESPONSE_BYTES ?? 512 * 1024),
     timeoutMs: Number(process.env.HTTP_TOOL_TIMEOUT_MS ?? 10_000),
   } satisfies HttpToolConfig,
+  artifact: {
+    reportsDir: path.resolve(
+      process.cwd(),
+      process.env.REPORTS_DIR ?? "data/reports",
+    ),
+    maxBytes: Number(process.env.ARTIFACT_MAX_BYTES ?? 5 * 1024 * 1024),
+  } satisfies ArtifactConfig,
   llm: {
     provider: provider === "openai" ? "openai" : "mock",
     baseUrl: process.env.LLM_BASE_URL ?? "https://api.openai.com/v1",

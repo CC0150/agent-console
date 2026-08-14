@@ -10,6 +10,7 @@ import {
 import { TaskRunner } from "../agent/runner";
 import { config } from "../config";
 import {
+  artifactRepository,
   approvalRepository,
   eventRepository,
   taskRepository,
@@ -144,6 +145,35 @@ tasksRouter.get("/:id/events", (req, res) => {
   res.json({ events: eventRepository.listByTask(task.id) });
 });
 
+tasksRouter.get("/:id/artifacts", (req, res) => {
+  const task = taskRepository.findById(req.params.id);
+  if (!task) {
+    throw new AppError(404, "task_not_found", "任务不存在");
+  }
+  res.json({ artifacts: artifactRepository.listByTask(task.id) });
+});
+
+tasksRouter.get("/:id/artifacts/:artifactId/content", (req, res) => {
+  const task = taskRepository.findById(req.params.id);
+  if (!task) {
+    throw new AppError(404, "task_not_found", "任务不存在");
+  }
+  const result = artifactRepository.readContent(req.params.artifactId);
+  if (!result || result.artifact.taskId !== task.id) {
+    throw new AppError(404, "artifact_not_found", "产出物不存在");
+  }
+
+  res.setHeader("Content-Type", result.artifact.mimeType);
+  res.setHeader("Content-Length", result.artifact.sizeBytes);
+  if (req.query.download === "1") {
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename*=UTF-8''${encodeURIComponent(result.artifact.name)}`,
+    );
+  }
+  res.send(result.content);
+});
+
 tasksRouter.delete("/:id", (req, res) => {
   const task = taskRepository.findById(req.params.id);
   if (!task) {
@@ -257,6 +287,7 @@ function deleteTask(task: Task): void {
   if (runner) {
     runner.cancel();
   }
+  artifactRepository.deleteByTask(task.id);
   taskRepository.remove(task.id);
 }
 

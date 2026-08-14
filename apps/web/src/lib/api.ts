@@ -4,6 +4,7 @@ import type {
   BatchTaskAction,
   Task,
   TaskAction,
+  TaskArtifact,
   TaskEvent,
   TaskSortField,
   TaskSortOrder,
@@ -115,6 +116,19 @@ export const api = {
       body: JSON.stringify({ goal, workspaceId }),
     }),
   getEvents: (taskId: string) => request<{ events: TaskEvent[] }>(`/tasks/${taskId}/events`),
+  listArtifacts: (taskId: string) =>
+    request<{ artifacts: TaskArtifact[] }>(`/tasks/${taskId}/artifacts`),
+  getArtifactContent: async (taskId: string, artifactId: string) => {
+    const response = await fetch(
+      `/api/tasks/${taskId}/artifacts/${artifactId}/content`,
+    );
+    if (!response.ok) {
+      throw new Error(`读取产出物失败: ${response.status}`);
+    }
+    return response.text();
+  },
+  artifactDownloadUrl: (taskId: string, artifactId: string) =>
+    `/api/tasks/${taskId}/artifacts/${artifactId}/content?download=1`,
   getPendingApprovals: (taskId: string) =>
     request<{ approvals: ApprovalRequest[] }>(`/tasks/${taskId}/approvals`),
   resolveApproval: (taskId: string, approvalId: string, decision: ApprovalDecision) =>

@@ -7,6 +7,7 @@ import type {
   TaskStatus,
   ToolCall,
 } from "@agent-console/contracts";
+import { TaskArtifact } from "@agent-console/contracts";
 import { config } from "../config";
 import {
   approvalRepository,
@@ -340,6 +341,12 @@ export class TaskRunner {
         taskId: this.taskId,
         signal: this.abortController.signal,
       });
+      const artifactOutput = TaskArtifact.safeParse(
+        (output as { artifact?: unknown } | null)?.artifact,
+      );
+      if (artifactOutput.success) {
+        await this.emit("artifact.created", { artifact: artifactOutput.data });
+      }
       const finishedCall: ToolCall = {
         ...record,
         state: "succeeded",

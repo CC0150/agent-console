@@ -23,6 +23,7 @@ import {
 } from "../../lib/taskEvents";
 import { useRunStore } from "../../stores/runStore";
 import { ApprovalPanel } from "./ApprovalPanel";
+import { ArtifactsPanel } from "./ArtifactsPanel";
 import { ConversationView } from "./ConversationView";
 import { EventLog } from "./EventLog";
 import { PlanTimeline } from "./PlanTimeline";
@@ -46,6 +47,12 @@ export function TaskDetailPage() {
   const historyQuery = useQuery({
     queryKey: ["events", taskId],
     queryFn: () => api.getEvents(taskId),
+    enabled: Boolean(taskId),
+    refetchInterval: 2_000,
+  });
+  const artifactsQuery = useQuery({
+    queryKey: ["artifacts", taskId],
+    queryFn: () => api.listArtifacts(taskId),
     enabled: Boolean(taskId),
     refetchInterval: 2_000,
   });
@@ -246,6 +253,11 @@ export function TaskDetailPage() {
             status={task.status}
           />
           <StreamConsole text={streamText} status={task.status} />
+          <ArtifactsPanel
+            taskId={task.id}
+            artifacts={artifactsQuery.data?.artifacts ?? []}
+            isLoading={artifactsQuery.isLoading}
+          />
           <EventLog events={allEvents} />
         </div>
       </div>

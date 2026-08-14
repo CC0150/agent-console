@@ -3,6 +3,7 @@ import { Task, TaskStatus } from "./task";
 import { ApprovalRequest } from "./approval";
 import { AssistantToolCall, PlanStep, ToolCall } from "./tools";
 import { Usage } from "./llm";
+import { TaskArtifact } from "./artifacts";
 
 export const TASK_EVENT_TYPES = [
   "task.created",
@@ -14,6 +15,7 @@ export const TASK_EVENT_TYPES = [
   "approval.resolved",
   "message.delta",
   "message.assistant",
+  "artifact.created",
   "task.completed",
   "task.failed",
 ] as const;
@@ -95,6 +97,13 @@ export const MessageAssistantEvent = EventBase.extend({
   }),
 });
 
+export const ArtifactCreatedEvent = EventBase.extend({
+  type: z.literal("artifact.created"),
+  payload: z.object({
+    artifact: TaskArtifact,
+  }),
+});
+
 export const TaskCompletedEvent = EventBase.extend({
   type: z.literal("task.completed"),
   payload: z.object({
@@ -119,6 +128,7 @@ export const TaskEvent = z.discriminatedUnion("type", [
   ApprovalResolvedEvent,
   MessageDeltaEvent,
   MessageAssistantEvent,
+  ArtifactCreatedEvent,
   TaskCompletedEvent,
   TaskFailedEvent,
 ]);
