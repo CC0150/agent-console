@@ -27,6 +27,7 @@ import { ErrorBanner, toErrorMessage } from "../../components/ui/ErrorBanner";
 import { SelectField } from "../../components/ui/SelectField";
 import { StatusBadge } from "../../components/ui/StatusBadge";
 import { Tooltip } from "../../components/ui/Tooltip";
+import { useDebouncedInput } from "../../hooks/useDebounce";
 import { api } from "../../lib/api";
 import { useTaskListQuery, type TaskStatusFilter } from "./taskListQuery";
 
@@ -62,7 +63,10 @@ export function TaskList({ tasks, total, isLoading, workspaces }: TaskListProps)
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { state: query, update } = useTaskListQuery();
-  const [searchInput, setSearchInput] = useState(query.q);
+  const [searchInput, setSearchInput] = useDebouncedInput(
+    query.q,
+    (value) => update({ q: value }),
+  );
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [pendingDelete, setPendingDelete] = useState<{
     taskIds: string[];
@@ -71,19 +75,6 @@ export function TaskList({ tasks, total, isLoading, workspaces }: TaskListProps)
   const headerCheckboxRef = useRef<HTMLInputElement>(null);
   const totalPages = Math.max(1, Math.ceil(total / query.pageSize));
   const hasFilters = query.q.trim().length > 0 || query.status !== "all";
-
-  useEffect(() => {
-    setSearchInput(query.q);
-  }, [query.q]);
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      if (searchInput.trim() !== query.q.trim()) {
-        update({ q: searchInput });
-      }
-    }, 300);
-    return () => window.clearTimeout(timer);
-  }, [searchInput, query.q, update]);
 
   useEffect(() => {
     const visible = new Set(tasks.map((task) => task.id));

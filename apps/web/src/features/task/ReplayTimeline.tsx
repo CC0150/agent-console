@@ -1,4 +1,5 @@
 import type { TaskEvent } from "@agent-console/contracts";
+import { useDebouncedInput } from "../../hooks/useDebounce";
 import { Tooltip } from "../../components/ui/Tooltip";
 import { ListFilter, ListVideo, Search, X } from "lucide-react";
 import { useMemo } from "react";
@@ -33,6 +34,7 @@ export function ReplayTimeline({
   onFilterChange,
   onQueryChange,
 }: ReplayTimelineProps) {
+  const [searchInput, setSearchInput] = useDebouncedInput(query, onQueryChange);
   const visibleEvents = useMemo(
     () => filterReplayEvents(events, { type: filter, query }),
     [events, filter, query],
@@ -72,18 +74,18 @@ export function ReplayTimeline({
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-400" />
             <input
               type="search"
-              value={query}
-              onChange={(event) => onQueryChange(event.target.value)}
+              value={searchInput}
+              onChange={(event) => setSearchInput(event.target.value)}
               placeholder="搜索事件内容"
               aria-label="搜索事件内容"
               className="h-9 w-full rounded-md border border-ink-700/30 bg-ink-950/70 pl-9 pr-8 text-sm text-ink-100 outline-none transition placeholder:text-ink-500 focus:border-signal-500/60 focus:ring-2 focus:ring-signal-500/15"
             />
-            {query ? (
+            {searchInput ? (
               <Tooltip content="清除搜索">
                 <button
                   type="button"
                   aria-label="清除搜索"
-                  onClick={() => onQueryChange("")}
+                  onClick={() => setSearchInput("")}
                   className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded text-ink-400 transition hover:bg-ink-700/20 hover:text-ink-200"
                 >
                   <X className="h-3.5 w-3.5" />
